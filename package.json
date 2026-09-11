@@ -1,0 +1,21 @@
+{
+  "name": "rams-bj-friend",
+  "version": "1.4.6",
+  "private": true,
+  "type": "module",
+  "description": "Ram's BJ Friend \u2014 Cloudflare Worker + D1 + Vertex AI session analysis",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:create": "wrangler d1 create rams-bj-friend",
+    "db:migrate:local": "wrangler d1 execute rams-bj-friend --local --file=./schema.sql",
+    "db:migrate:remote": "wrangler d1 execute rams-bj-friend --remote --file=./schema.sql",
+    "user:create": "node scripts/create-user.mjs",
+    "tail": "wrangler tail",
+    "test": "node tests/export.test.mjs",
+    "test:browser": "node tests/strategy.test.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.120.1"
+  }
+}

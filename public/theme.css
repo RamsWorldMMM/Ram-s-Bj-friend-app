@@ -1,0 +1,819 @@
+/* ===========================================================================
+   Ram's BJ Friend — PRODUCTION THEME
+   ---------------------------------------------------------------------------
+   Presentation only. This file restyles existing selectors and adds no markup,
+   no IDs, no classes and no behaviour. Every hook the app's JavaScript relies
+   on is untouched, so game logic, calculations and flows are unaffected.
+
+   Design intent: a quiet, premium casino surface. Deep emerald felt and warm
+   gold as accents; a calm neutral canvas so money, cards and the primary
+   action read instantly at a glance mid-play.
+   =========================================================================== */
+
+:root {
+  /* Canvas */
+  --bg:            #F2F4F3;
+  --panel:         #FFFFFF;
+  --panel-sunk:    #F7F9F8;
+  --text:          #0F1A15;
+  --muted:         #5F6F67;
+  --border:        #E2E8E4;
+  --border-strong: #CBD6D0;
+
+  /* Felt + gold */
+  --green:         #0A5236;
+  --green2:        #073A26;
+  --green-soft:    #E9F2ED;
+  --felt:          #0A5236;
+  --gold:          #C9A227;
+  --gold-soft:     #F6EFD8;
+
+  /* Semantics */
+  --win:           #147950;
+  --win-ink:       #0E6B44;
+  --danger:        #A32222;
+  --danger-soft:   #FCEDED;
+  --warn:          #FFF6DF;
+
+  /* Elevation */
+  --shadow-sm: 0 1px 2px rgba(12, 32, 22, .05), 0 1px 1px rgba(12, 32, 22, .04);
+  --shadow:    0 2px 8px rgba(12, 32, 22, .06), 0 8px 24px rgba(12, 32, 22, .05);
+  --shadow-lg: 0 12px 40px rgba(12, 32, 22, .12);
+  --ring:      0 0 0 3px rgba(10, 82, 54, .16);
+
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 18px;
+}
+
+/* ---------------------------------------------------------------- typography */
+
+body {
+  background:
+    radial-gradient(1100px 520px at 50% -180px, #E7EFEA 0%, transparent 70%),
+    var(--bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  letter-spacing: -0.005em;
+}
+
+h1, h2, h3 { letter-spacing: -0.02em; }
+
+/* Money and counters must not jitter as digits change. */
+.status-strip strong,
+.stats-grid strong, .exposure-grid strong,
+.movement strong, .movement span,
+.compact-result-row strong, .compact-breakdown,
+.next-round-dock .bankroll-mini strong,
+.hist-row .pl, .money-grid, .side-result-grid,
+.stepper input, #liveCountBar b {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* --------------------------------------------------------------------- header */
+
+.app-header {
+  background: linear-gradient(180deg, #FFFFFF 0%, #FBFCFB 100%);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 1px 0 rgba(12, 32, 22, .03);
+  padding: 10px 16px;
+}
+
+.app-header h1 {
+  color: var(--green);
+  font-size: 1.02rem;
+  letter-spacing: .1em;
+}
+
+/* A thin gold hairline under the header reads as "table edge". */
+.app-header::after {
+  content: "";
+  position: absolute; left: 0; right: 0; bottom: -1px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--gold) 25%, var(--gold) 75%, transparent);
+  opacity: .5;
+}
+.app-header { position: sticky; }
+
+.status-strip { color: var(--muted); }
+.status-strip strong { color: var(--text); font-weight: 700; }
+.status-strip span + span::before { color: var(--border-strong); opacity: 1; }
+
+/* ---------------------------------------------------------------- containers */
+
+main { padding: 18px 16px 24px; gap: 14px; }
+
+.panel {
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  padding: 18px;
+}
+
+.section-heading h2, .panel h2 {
+  font-size: 1.06rem;
+  font-weight: 700;
+}
+.section-heading p { color: var(--muted); }
+
+/* ------------------------------------------------------------------ the felt */
+
+.table-panel {
+  background:
+    radial-gradient(120% 90% at 50% -10%, #126B47 0%, #0A5236 45%, #06371F 100%);
+  border: 1px solid rgba(255, 255, 255, .10);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .12),
+    inset 0 -40px 80px rgba(0, 0, 0, .22),
+    var(--shadow-lg);
+  border-radius: var(--r-lg);
+}
+
+.table-panel .table-label { color: rgba(255, 255, 255, .72); letter-spacing: .04em; }
+
+.dealer-area .table-label {
+  display: inline-block;
+  padding: 4px 12px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, .16);
+  font-size: .72rem;
+}
+
+.live-bar span {
+  background: rgba(0, 0, 0, .22);
+  border-color: rgba(255, 255, 255, .16);
+  border-radius: var(--r-sm);
+}
+
+/* -------------------------------------------------------------------- cards */
+
+.playing-card {
+  border: 1px solid #D8DEDA;
+  border-radius: 8px;
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, .10),
+    0 4px 10px rgba(0, 0, 0, .18);
+  background: linear-gradient(160deg, #FFFFFF 0%, #F7F8F7 100%);
+  font-family: "Iowan Old Style", Georgia, serif;
+}
+.playing-card.red { color: #C0202F; }
+.playing-card .corner { font-weight: 800; letter-spacing: -.02em; }
+.playing-card .center { opacity: .95; }
+
+.mini-card {
+  border-radius: 4px;
+  border: 1px solid #DCE2DE;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .12);
+  background: linear-gradient(160deg, #FFFFFF, #F8F9F8);
+}
+.mini-card.red { color: #C0202F; }
+
+/* ---------------------------------------------------------------- play boxes */
+
+.play-box {
+  background: rgba(255, 255, 255, .97);
+  border-radius: var(--r-md);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .18);
+  border: 1px solid rgba(255, 255, 255, .5);
+}
+.play-box h3 { font-size: .98rem; letter-spacing: -.01em; }
+.play-box.active-box { outline: 2px solid var(--gold); outline-offset: 1px; }
+
+.hand-card { border-radius: var(--r-sm); border-color: var(--border); }
+.hand-card.active-hand {
+  outline: 2px solid var(--green);
+  outline-offset: 1px;
+  background: var(--green-soft);
+}
+.hand-meta { color: var(--muted); }
+
+/* -------------------------------------------------------------------- forms */
+
+.field span, .amount-control label { font-weight: 600; color: var(--muted); }
+
+input, select, textarea {
+  border-radius: var(--r-sm);
+  border-color: var(--border-strong);
+  transition: border-color .12s ease, box-shadow .12s ease;
+}
+input:hover, select:hover, textarea:hover { border-color: #B4C3BB; }
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--green);
+  box-shadow: var(--ring);
+}
+
+textarea { background: var(--panel-sunk); font-size: .84rem; line-height: 1.55; }
+
+/* ------------------------------------------------------------------ buttons */
+
+.primary, .secondary, .danger {
+  border-radius: var(--r-sm);
+  font-weight: 700;
+  letter-spacing: -.01em;
+  transition: background .14s ease, border-color .14s ease,
+              box-shadow .14s ease, transform .06s ease;
+}
+.primary:focus-visible, .secondary:focus-visible, .danger:focus-visible,
+.stepper button:focus-visible, .preset-row button:focus-visible,
+.action-grid button:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+.primary:active, .secondary:active, .danger:active { transform: translateY(1px); }
+
+.primary {
+  background: linear-gradient(180deg, #0C6041 0%, var(--green) 60%, var(--green2) 100%);
+  color: #fff;
+  box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255, 255, 255, .14);
+}
+.primary:hover { background: linear-gradient(180deg, #0E6B49 0%, #084A2F 100%); }
+
+.secondary { background: #fff; border-color: var(--border-strong); color: var(--text); }
+.secondary:hover { background: var(--panel-sunk); border-color: #B4C3BB; }
+
+.danger { background: #fff; border-color: #E4C2C2; color: var(--danger); }
+.danger:hover { background: var(--danger-soft); border-color: #D6A9A9; }
+
+.small { border-radius: 999px; font-size: .74rem; padding: 7px 12px; }
+
+/* The single most important control on the betting screen. */
+#dealBtn.large {
+  font-size: 1.06rem;
+  padding: 17px;
+  border-radius: var(--r-md);
+  letter-spacing: .01em;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, .16) inset,
+    0 6px 18px rgba(10, 82, 54, .26);
+}
+#dealBtn.large::before { content: "♠ "; opacity: .55; }
+#dealBtn:disabled { opacity: .45; box-shadow: none; }
+
+/* ---------------------------------------------------------- wager controls */
+
+.wager-card {
+  border-radius: var(--r-md);
+  border-color: var(--border);
+  background: linear-gradient(180deg, #FFFFFF, #FCFDFC);
+  box-shadow: var(--shadow-sm);
+}
+.wager-card.active-wager { border-color: var(--green); box-shadow: var(--ring), var(--shadow-sm); }
+.wager-title-row h3 { font-size: .96rem; }
+
+.stepper button, .preset-row button {
+  background: linear-gradient(180deg, #FFFFFF, #F4F7F5);
+  border-color: var(--border-strong);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  transition: background .12s ease, border-color .12s ease, transform .06s ease;
+}
+.stepper button:hover, .preset-row button:hover {
+  background: var(--green-soft);
+  border-color: var(--green);
+  color: var(--green);
+}
+.stepper button:active, .preset-row button:active { transform: translateY(1px); }
+.stepper button { font-size: 1.2rem; line-height: 1; }
+
+.stepper input {
+  background: var(--panel-sunk);
+  border-color: var(--border-strong);
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+
+.preset-row button { font-weight: 700; }
+
+.amount-control small { color: var(--muted); opacity: .85; }
+
+/* ------------------------------------------------------------ action buttons */
+
+.action-grid button {
+  border-radius: var(--r-sm);
+  border-color: var(--border-strong);
+  background: linear-gradient(180deg, #FFFFFF, #F5F8F6);
+  font-weight: 800;
+  letter-spacing: -.01em;
+  transition: background .12s ease, border-color .12s ease,
+              color .12s ease, transform .06s ease;
+}
+.action-grid button:hover:not(:disabled) {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+.action-grid button:active:not(:disabled) { transform: translateY(1px); }
+.action-grid button:disabled { opacity: .3; }
+
+.feedback {
+  background: var(--green-soft);
+  border: 1px solid #CFE2D8;
+  border-radius: var(--r-sm);
+  color: var(--text);
+}
+
+/* --------------------------------------------------------------- settlement */
+
+.movement {
+  border-radius: var(--r-md);
+  background: var(--panel-sunk);
+  border-color: var(--border);
+  font-weight: 700;
+}
+
+.compact-box-result {
+  border-radius: var(--r-md);
+  border-color: var(--border);
+  box-shadow: var(--shadow-sm);
+  transition: border-color .12s ease, box-shadow .12s ease;
+}
+.compact-box-result:hover { border-color: var(--border-strong); }
+.compact-result-row strong:last-child { font-weight: 800; }
+.compact-breakdown { color: var(--muted); }
+
+.next-round-dock {
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -8px 28px rgba(12, 32, 22, .10);
+  background: rgba(255, 255, 255, .98);
+}
+.next-round-dock .bankroll-mini strong { font-weight: 800; }
+
+/* -------------------------------------------------------------- notices etc */
+
+.shoe-banner {
+  border-radius: var(--r-lg);
+  border: 1px solid var(--gold);
+  background: linear-gradient(180deg, #FFFBEF, var(--gold-soft));
+  box-shadow: var(--shadow);
+}
+.shoe-banner h2 { color: #7A5E06; letter-spacing: .02em; }
+
+.warning { border-radius: var(--r-md); background: var(--warn); border-color: #EBD9A4; }
+
+.shoe-pill {
+  border-radius: 999px;
+  border-color: var(--border-strong);
+  background: #fff;
+  color: var(--muted);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+.diagnosis { border-radius: var(--r-md); background: var(--panel-sunk); line-height: 1.55; }
+
+.mistake-item {
+  border-radius: var(--r-sm);
+  border-left: 3px solid var(--danger);
+  background: #FDF8F8;
+  line-height: 1.5;
+}
+
+.fine-print, .muted { line-height: 1.5; }
+
+.stats-grid article, .exposure-grid article {
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
+  background: linear-gradient(180deg, #FFFFFF, #FCFDFC);
+}
+.stats-grid strong, .exposure-grid strong { font-weight: 800; letter-spacing: -.02em; }
+
+/* ------------------------------------------------------- cloud + live layers */
+
+.cloud-pill {
+  border-radius: 999px;
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-sm);
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition: border-color .12s ease, background .12s ease;
+}
+.cloud-pill:hover { border-color: var(--green); background: var(--green-soft); }
+
+.mode-switch button { font-weight: 700; letter-spacing: .01em; }
+
+.cloud-login { border-radius: 22px; box-shadow: 0 30px 80px rgba(0, 0, 0, .38); }
+.cloud-login h2 { color: var(--green); }
+
+.ai-panel .ai-body {
+  border-radius: var(--r-md);
+  background: var(--panel-sunk);
+  line-height: 1.6;
+}
+.ai-grade {
+  background: linear-gradient(180deg, #0C6041, var(--green2));
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
+  letter-spacing: -.01em;
+}
+.leak { border-radius: var(--r-md); border-left-color: var(--gold); background: #FFFDF7; }
+
+.hist-row {
+  border-radius: var(--r-md);
+  transition: border-color .12s ease, background .12s ease;
+}
+.hist-row:hover { border-color: var(--border-strong); background: var(--panel-sunk); }
+.hist-row .pl.up { color: var(--win-ink); }
+
+#liveCountBar {
+  background: linear-gradient(180deg, #0C6041, var(--green2));
+  border: 1px solid rgba(255, 255, 255, .10);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-sm);
+}
+#liveCountBar b { font-weight: 800; }
+
+#livePad {
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -12px 40px rgba(12, 32, 22, .16);
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+}
+.live-pad-head strong { font-size: .98rem; }
+.rank-grid button, .suit-row button {
+  border-radius: var(--r-sm);
+  border-color: var(--border-strong);
+  background: linear-gradient(180deg, #FFFFFF, #F4F7F5);
+  transition: background .1s ease, border-color .1s ease, transform .06s ease;
+}
+.rank-grid button:hover, .suit-row button:hover {
+  background: var(--green-soft);
+  border-color: var(--green);
+  color: var(--green);
+}
+.rank-grid button:active, .suit-row button:active { transform: translateY(1px); }
+.suit-row button.red:hover { color: #C0202F; border-color: #C0202F; background: #FDF1F2; }
+
+.about-panel summary { font-weight: 600; }
+.about-panel summary:hover { color: var(--green); }
+
+/* --------------------------------------------------------------- motion a11y */
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+  .primary:active, .secondary:active, .danger:active,
+  .action-grid button:active, .stepper button:active,
+  .preset-row button:active, .rank-grid button:active { transform: none; }
+}
+
+/* ------------------------------------------------------------------- mobile */
+
+@media (max-width: 850px) {
+  main { padding: 12px 12px 20px; gap: 12px; }
+  .panel { padding: 14px; border-radius: var(--r-md); }
+  .action-grid button { min-height: 50px; font-size: 1.02rem; }
+  .stepper button, .preset-row button { min-height: 46px; }
+  .rank-grid button { min-height: 54px; }
+}
+
+/* ------------------------------------------------- sticky-header clearance */
+/* The app scrolls panels into view with block:"start". With a sticky header
+   that would tuck the first rows underneath it, so reserve the header height.
+   Purely visual — the scroll call itself is untouched. */
+#bettingPanel, #tablePanel, #roundResultPanel, #aiPanel, #historyPanel, .shoe-banner {
+  scroll-margin-top: 84px;
+}
+
+/* ------------------------------------------------------ box tabs on the felt */
+
+.box-tabs { gap: 8px; }
+.box-tabs button {
+  border-radius: 999px;
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, .28);
+  background: rgba(0, 0, 0, .22);
+  color: rgba(255, 255, 255, .82);
+  min-height: 44px;
+  transition: background .12s ease, color .12s ease, border-color .12s ease;
+}
+.box-tabs button:hover { background: rgba(0, 0, 0, .34); color: #fff; }
+.box-tabs button.active,
+.box-tabs button[aria-selected="true"] {
+  background: #fff;
+  color: var(--green);
+  border-color: #fff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .22);
+}
+
+/* Wager box tabs sit on the light canvas, so they invert. */
+.wager-grid ~ .box-tabs button,
+.panel .box-tabs button {
+  background: #fff;
+  color: var(--muted);
+  border-color: var(--border-strong);
+}
+.panel .box-tabs button.active {
+  background: linear-gradient(180deg, #0C6041, var(--green2));
+  color: #fff;
+  border-color: var(--green2);
+}
+
+/* ---------------------------------------------- compact header, phone width */
+/* The identity line plus live status is the whole requirement. The sync pill
+   and mode switch are additions, so on narrow screens they shrink to fit that
+   one line instead of pushing the header onto extra rows. */
+@media (max-width: 560px) {
+  .app-header { padding: 7px 12px; gap: 2px 8px; }
+  .app-header h1 { font-size: .92rem; letter-spacing: .07em; }
+
+  /* Sync state collapses to its status dot; tapping still opens sign-out. */
+  .app-header .cloud-pill { padding: 4px 7px; gap: 0; }
+  .app-header .cloud-pill #cloudText { display: none; }
+
+  .app-header .mode-switch button { padding: 4px 10px; font-size: .7rem; min-height: 0; }
+  .status-strip { font-size: .76rem; margin-top: 1px; }
+  .status-strip strong { font-size: .82rem; }
+  .status-strip span + span::before { margin: 0 5px; }
+}
+
+/* ============================ BRIEF UI ITEMS ============================== */
+
+/* §3a — six main presets on one row (was four). */
+.preset-row.preset-row-6 { grid-template-columns: repeat(6, 1fr); gap: 4px; }
+.preset-row.preset-row-6 button { font-size: .7rem; padding: 0 2px; }
+@media (max-width: 420px) {
+  .preset-row.preset-row-6 { grid-template-columns: repeat(3, 1fr); }
+  .preset-row.preset-row-6 button { font-size: .76rem; }
+}
+
+/* §3c — readonly wagers must not look disabled, and must not show a caret. */
+input[data-field][readonly] {
+  background: var(--panel-sunk);
+  cursor: default;
+  caret-color: transparent;
+  user-select: none;
+}
+input[data-field][readonly]:focus { box-shadow: none; border-color: var(--green); }
+
+/* §5b — CARDS HAVE ABSOLUTE VISUAL PRIORITY.
+   The settlement card row was `nowrap` + `overflow-x:auto`, so a 4- or 5-card
+   hand scrolled sideways and hid cards. Wrap instead: text yields space, cards
+   never do. */
+.mini-cards {
+  flex-wrap: wrap !important;
+  overflow-x: visible !important;
+  row-gap: 4px;
+}
+.compact-result-main { min-width: 0; }
+.mini-hand { align-items: flex-start; }
+
+/* §7 — compact result layout: let the label stack under the cards rather than
+   compete with them for width. */
+.compact-result-row { align-items: start; }
+.compact-result-label { line-height: 1.35; }
+@media (max-width: 560px) {
+  .compact-result-row { grid-template-columns: 46px minmax(0, 1fr) auto; gap: 7px; }
+  .compact-breakdown { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* §8 — reclaim the empty space beside the box selector: the box count and the
+   Clear action share one row instead of each taking a full-width block. */
+#bettingPanel .compact-field { max-width: none; }
+@media (min-width: 560px) {
+  #bettingPanel .compact-field { max-width: 220px; }
+}
+.bet-actions { margin-top: 0; align-items: end; }
+
+/* §4 — tighter vertical rhythm in the betting panel so Deal climbs the page. */
+.wager-card { gap: 10px; padding: 12px; }
+.amount-control { gap: 5px; }
+.preset-row { margin-top: 5px; }
+.stepper button, .preset-row button { min-height: 42px; }
+.preset-row button { min-height: 34px; }
+@media (max-width: 850px) {
+  .wager-card { gap: 9px; padding: 11px; }
+  .stepper { grid-template-columns: 44px 1fr 44px; }
+  .stepper button { min-height: 44px; }
+  .preset-row button { min-height: 36px; }
+  .side-grid { gap: 8px; }
+}
+
+/* §8 — one-screen settlement must survive §5b's wrapping.
+   Wrapping cards makes the panel taller, so the surrounding chrome gives up
+   space instead: smaller mini-cards, tighter padding, denser breakdown. */
+.mini-card { width: 28px; height: 40px; flex: 0 0 28px; }
+.mini-card .mini-rank { font-size: 9px; top: 2px; left: 3px; }
+.mini-card .mini-suit { font-size: 15px; }
+.mini-hands { gap: 4px; }
+
+.settlement-panel { padding-bottom: 84px; }
+.settlement-panel .movement { padding: 9px 11px; margin: 9px 0; }
+.settlement-panel .round-stats { margin-top: 8px; }
+.compact-box-result { padding: 8px 10px; }
+.settlements { gap: 8px; }
+
+@media (max-width: 850px) {
+  .settlement-panel .settlement-top { gap: 9px; }
+  .settlement-panel .playing-card { width: 44px; height: 64px; flex-basis: 44px; }
+  .settlement-panel .playing-card .center { font-size: 22px; }
+  .settlement-panel .playing-card .corner { font-size: 11px; }
+  .compact-breakdown { gap: 4px; font-size: .72rem; }
+}
+
+/* §4 — ZERO-SCROLL BETTING.
+   Two moves, both presentational:
+   1. Side-bet controls put their stepper and presets side by side instead of
+      stacked, reclaiming roughly a third of the panel height.
+   2. Deal is pinned to the bottom of the viewport while the panel scrolls, so
+      the primary action is reachable at all times without page scrolling —
+      the same pattern the settlement screen already uses for Next round. */
+
+@media (max-width: 850px) {
+  .side-grid .amount-control {
+    grid-template-columns: minmax(120px, 1fr) minmax(150px, 1.15fr);
+    grid-template-areas: "label label" "stepper presets";
+    align-items: center;
+    column-gap: 8px;
+  }
+  .side-grid .amount-control > label { grid-area: label; }
+  .side-grid .amount-control > .stepper { grid-area: stepper; }
+  .side-grid .amount-control > .preset-row { grid-area: presets; margin-top: 0; }
+  .side-grid .stepper { grid-template-columns: 38px 1fr 38px; gap: 4px; }
+  .side-grid .stepper button { min-height: 38px; font-size: 1.05rem; }
+  .side-grid .stepper input { font-size: .95rem; padding: 7px 3px; }
+  .side-grid .preset-row { gap: 4px; }
+  .side-grid .preset-row button { min-height: 34px; font-size: .7rem; padding: 0 2px; }
+  .side-grid .amount-control label small { font-size: .64rem; }
+
+  /* Exposure summary on one line rather than three stacked cards. */
+  .exposure-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .exposure-grid article { padding: 7px 8px; }
+  .exposure-grid span { font-size: .66rem; }
+  .exposure-grid strong { font-size: .9rem; margin-top: 2px; }
+
+  /* Deal always within thumb reach. */
+  #dealBtn.large {
+    position: sticky;
+    bottom: 10px;
+    z-index: 6;
+    padding: 15px;
+    box-shadow: 0 6px 22px rgba(10, 82, 54, .34), 0 0 0 6px var(--panel);
+  }
+  #bettingPanel { padding-bottom: 6px; }
+}
+
+/* ===================== 5 · OUTCOME COLOUR AT SETTLEMENT ==================== */
+/* The engine names outcomes in words. A colour edge lets a three-box round be
+   read in one glance instead of three. Classes are applied by reveal.js from
+   the settled figures — nothing is recomputed here. */
+
+.compact-box-result { border-left: 4px solid var(--border-strong); }
+.compact-box-result.res-win  { border-left-color: var(--win-ink); background: #F6FBF8; }
+.compact-box-result.res-loss { border-left-color: var(--danger);  background: #FEF9F9; }
+.compact-box-result.res-push { border-left-color: var(--border-strong); }
+
+.compact-box-result.res-win  .compact-result-row > strong:last-child { color: var(--win-ink); }
+.compact-box-result.res-loss .compact-result-row > strong:last-child { color: var(--danger); }
+
+/* ==================== 7 · ROUND MOVEMENT AS THE HERO ====================== */
+/* The single number that matters is the round delta. The four supporting
+   figures step back so it reads first. */
+
+#roundResultPanel .movement {
+  align-items: center;
+  border-width: 2px;
+  padding: 14px 16px;
+  border-radius: var(--r-md);
+}
+#roundResultPanel .movement span {
+  font-size: .78rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+#roundResultPanel .movement strong {
+  font-size: 1.9rem;
+  font-weight: 800;
+  letter-spacing: -.03em;
+  line-height: 1;
+}
+#roundResultPanel .movement.res-win {
+  border-color: #BCD8CA; background: linear-gradient(180deg, #F2FAF5, #E9F4EE);
+}
+#roundResultPanel .movement.res-win strong,
+#roundResultPanel .movement.res-win span { color: var(--win-ink); }
+#roundResultPanel .movement.res-loss {
+  border-color: #E6C0C0; background: linear-gradient(180deg, #FEF6F6, #FBEDED);
+}
+#roundResultPanel .movement.res-loss strong,
+#roundResultPanel .movement.res-loss span { color: var(--danger); }
+#roundResultPanel .movement.res-push { background: var(--panel-sunk); }
+
+/* Supporting figures become secondary. */
+#roundResultPanel .round-stats article { padding: 9px 10px; box-shadow: none; background: var(--panel-sunk); }
+#roundResultPanel .round-stats span { font-size: .68rem; }
+#roundResultPanel .round-stats strong { font-size: 1rem; font-weight: 700; }
+
+/* ================= 6 · ONE CARD SIZE FOR EVERY REVIEW SURFACE ============= */
+/* Two sizes only: play size on the felt, review size everywhere the round is
+   being read back — settlement, round history, previous hand, blackjack banner.
+   Previously these were 34, 42 and 28px, which read as three components. */
+
+:root { --card-review-w: 38px; --card-review-h: 54px; }
+
+#settlements .mini-card,
+#roundHistoryPanel .playing-card,
+#prevHandStrip .playing-card,
+#bjAnnounce .bj-cards .playing-card {
+  width: var(--card-review-w);
+  height: var(--card-review-h);
+  flex: 0 0 var(--card-review-w);
+  border-radius: 6px;
+  border: 1px solid #D8DEDA;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .16);
+  background: linear-gradient(160deg, #FFFFFF 0%, #F7F8F7 100%);
+}
+
+/* mini-card carries different internals, so match its type to the same rhythm */
+#settlements .mini-card .mini-rank { font-size: 10px; top: 3px; left: 4px; font-weight: 800; }
+#settlements .mini-card .mini-suit { font-size: 17px; }
+
+#roundHistoryPanel .playing-card .center,
+#prevHandStrip .playing-card .center,
+#bjAnnounce .bj-cards .playing-card .center { font-size: 17px; }
+#roundHistoryPanel .playing-card .corner,
+#prevHandStrip .playing-card .corner,
+#bjAnnounce .bj-cards .playing-card .corner { font-size: 9px; line-height: .9; }
+
+/* The decision trail stays deliberately smaller — it is a footnote, not a hand. */
+#roundHistoryPanel .hcards.tiny .playing-card {
+  width: 28px; height: 40px; flex-basis: 28px; border-radius: 4px;
+}
+#roundHistoryPanel .hcards.tiny .playing-card .center { font-size: 12px; }
+#roundHistoryPanel .hcards.tiny .playing-card .corner { font-size: 7px; }
+
+@media (max-width: 850px) {
+  :root { --card-review-w: 34px; --card-review-h: 48px; }
+  #settlements .mini-card .mini-suit { font-size: 15px; }
+  #roundHistoryPanel .playing-card .center,
+  #prevHandStrip .playing-card .center { font-size: 15px; }
+}
+
+/* Runtime-injected stylesheets land after this file, so review-card sizing is
+   re-stated with id specificity to stay authoritative. */
+#settlements .mini-card,
+#roundHistoryPanel .hcards .playing-card,
+#prevHandStrip .hcards .playing-card,
+#bjAnnounce .bj-cards .playing-card {
+  width: var(--card-review-w) !important;
+  height: var(--card-review-h) !important;
+  flex-basis: var(--card-review-w) !important;
+}
+#roundHistoryPanel .hcards.tiny .playing-card {
+  width: 28px !important; height: 40px !important; flex-basis: 28px !important;
+}
+@media (max-width: 850px) {
+  #roundHistoryPanel .hcards.tiny .playing-card {
+    width: 26px !important; height: 37px !important; flex-basis: 26px !important;
+  }
+}
+
+/* Dealer's hand at settlement uses the same review size as everything else,
+   so the settlement screen shows one card size, not two. */
+#settlementDealerCards .playing-card {
+  width: var(--card-review-w) !important;
+  height: var(--card-review-h) !important;
+  flex-basis: var(--card-review-w) !important;
+  border-radius: 6px;
+  padding: 3px;
+}
+#settlementDealerCards .playing-card .center { font-size: 17px; }
+#settlementDealerCards .playing-card .corner { font-size: 9px; line-height: .9; }
+#settlementDealerCards .playing-card .corner.top { top: 3px; left: 4px; }
+#settlementDealerCards .playing-card .corner.bottom { right: 4px; bottom: 3px; }
+
+/* Duplicate outcome text on single-hand boxes (flagged by reveal.js). */
+.compact-result-label.dupe { display: none; }
+
+/* ================== FLICKER: COMPOSITING ON STICKY LAYERS ================= */
+/* `position:sticky/fixed` combined with `backdrop-filter: blur()` and no layer
+   hint makes Android Chrome re-rasterise the blur on every scroll frame, which
+   shimmers. Promoting these to their own compositor layer and telling the
+   browser what will change keeps the blur cached. `contain: paint` stops
+   repaints inside them leaking into the page. */
+
+.app-header,
+.next-round-dock {
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  contain: paint;
+}
+
+/* The sticky Deal button repaints its shadow while the panel scrolls under it. */
+#dealBtn.large {
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+/* Smooth scrollIntoView fires immediately after a render; without a hint the
+   scroll container re-rasterises the cards mid-animation. */
+#boxDisplay { will-change: scroll-position; }
+
+/* Honour the OS setting — no promotion is needed if motion is off. */
+@media (prefers-reduced-motion: reduce) {
+  .app-header, .next-round-dock, #dealBtn.large, #boxDisplay { will-change: auto; }
+}
