@@ -1,41 +1,59 @@
 # Ram's feedback
 
-## ✍️ Ram — write here
+Ram talks to ChatGPT. ChatGPT writes what he says into this file. The
+development team reads this file and builds from it. Ram never edits anything
+here himself.
 
-Add anything below. Rough notes are fine, no formatting needed. Date it if you
-can. Everything you write gets picked up and worked on, and moves into the
-tracker further down once it is handled.
+---
 
-**To edit on GitHub:** open this file, click the **pencil icon** at the top
-right, type, then click **Commit changes** at the bottom.
+## 📋 Instructions for ChatGPT
+
+When Ram gives feedback about the blackjack app, append it to **New feedback**
+below, directly under that heading so the newest entry is first. Use this shape,
+one block per issue:
 
 ```
---------------------------------------------------------------------------
-DATE:
-WHAT HAPPENED / WHAT YOU WANT:
+### [NEW] YYYY-MM-DD — short title
 
+**Ram said:** quote him as closely as you can, in his own words.
 
-WHERE IN THE APP (screen, button, moment):
+**Where:** which screen or moment in the app, if he mentioned it.
 
-
-HOW BAD (blocking / annoying / nice to have):
-
-
---------------------------------------------------------------------------
-DATE:
-WHAT HAPPENED / WHAT YOU WANT:
-
-
-WHERE IN THE APP (screen, button, moment):
-
-
-HOW BAD (blocking / annoying / nice to have):
-
-
---------------------------------------------------------------------------
+**Priority:** blocking / annoying / nice to have
 ```
 
-*(Nothing written above this line yet.)*
+A filled-in example, from real feedback he gave on 11 September:
+
+```
+### [NEW] 2026-09-11 — Trilux win not shown straight away
+
+**Ram said:** "when Ram hits Trilux or something, you are not showing quickly
+there as you just hit a Trilux"
+
+**Where:** during play, right after the cards are dealt.
+
+**Priority:** annoying
+```
+
+Rules:
+
+- One block per issue. If he mentions three things, write three blocks.
+- Keep his own wording. Do not tidy it into product language. "the button jumps
+  and I press the wrong one" is more useful than "UI instability on tap targets".
+- If he does not say where or how bad it is, write `not specified`. Do not guess.
+- Leave the status as `[NEW]`. The team changes it.
+- **Never edit or delete anything below the divider.** That section is the record
+  of work already done.
+- If he is asking a question rather than reporting something, still log it. A
+  question usually means something is unclear in the app.
+
+---
+
+## New feedback
+
+<!-- ChatGPT: add new entries directly below this line, newest first. -->
+
+*No new feedback yet.*
 
 ---
 
