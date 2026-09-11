@@ -1,4 +1,49 @@
-# Ram's feedback — tracker
+# Ram's feedback
+
+## ✍️ Ram — write here
+
+Add anything below. Rough notes are fine, no formatting needed. Date it if you
+can. Everything you write gets picked up and worked on, and moves into the
+tracker further down once it is handled.
+
+**To edit on GitHub:** open this file, click the **pencil icon** at the top
+right, type, then click **Commit changes** at the bottom.
+
+```
+--------------------------------------------------------------------------
+DATE:
+WHAT HAPPENED / WHAT YOU WANT:
+
+
+WHERE IN THE APP (screen, button, moment):
+
+
+HOW BAD (blocking / annoying / nice to have):
+
+
+--------------------------------------------------------------------------
+DATE:
+WHAT HAPPENED / WHAT YOU WANT:
+
+
+WHERE IN THE APP (screen, button, moment):
+
+
+HOW BAD (blocking / annoying / nice to have):
+
+
+--------------------------------------------------------------------------
+```
+
+*(Nothing written above this line yet.)*
+
+---
+
+# Tracker — what has already been handled
+
+Everything below is a record of requests Ram has already raised and what
+happened to them. Ram does not need to edit this part.
+
 
 Every request Ram has raised, what happened to it, and what is still open.
 Newest first within each section. Update this file when an item moves.
