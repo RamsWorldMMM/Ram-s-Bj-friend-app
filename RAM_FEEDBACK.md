@@ -4,6 +4,11 @@ Ram talks to ChatGPT. ChatGPT writes what he says into this file. The
 development team reads this file and builds from it. Ram never edits anything
 here himself.
 
+> **Branch: `dev`.** New feedback is written to the `dev` branch — that is the
+> branch ChatGPT has access to. `main` carries a copy so the file is easy to
+> find, but it can lag. **`dev` is the one that counts.** If the two ever
+> disagree, `dev` is right.
+
 ---
 
 ## 📋 Instructions for ChatGPT
@@ -46,6 +51,8 @@ Rules:
   of work already done.
 - If he is asking a question rather than reporting something, still log it. A
   question usually means something is unclear in the app.
+- Write to the **`dev`** branch. Do not open a pull request; commit straight to
+  `dev` so the team sees it immediately.
 
 ---
 
