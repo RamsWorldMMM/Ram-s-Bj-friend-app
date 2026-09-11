@@ -209,6 +209,76 @@
     return out;
   }
 
+  /* ------------------------------------------------------------- WIN TOAST
+   * Ram: "when I hit Trilux you are not showing it quickly there."
+   *
+   * The note below the table is the record; this is the moment. It fires as the
+   * cards land, which is when the side bets are actually decided.
+   *
+   * HARD CONSTRAINT, learned the expensive way: this must never move the action
+   * buttons. Anything in normal flow above them shoves them mid-decision and a
+   * tap meant for Hit lands on Double. So the toast is position:fixed — it is
+   * outside layout entirely and cannot displace a single pixel — and it is
+   * pointer-events:none, so it can never swallow a tap meant for a button
+   * underneath it either. It auto-dismisses; there is nothing to press.
+   */
+  var TOAST_MS = 3600;
+
+  function sideBetWins(box) {
+    var side = box.side || {}, out = [];
+    SIDE_BETS.forEach(function (bet) {
+      var r = side[bet.key];
+      if (r && r.stake && r.mult > 0) {
+        out.push({ name: bet.name, result: r.name, net: r.net, mult: r.mult, box: box.number });
+      }
+    });
+    return out;
+  }
+
+  function showWinToast() {
+    if (typeof state === 'undefined' || !state.boxes) return;
+    var wins = [];
+    state.boxes.forEach(function (box) { wins = wins.concat(sideBetWins(box)); });
+    if (!wins.length) return;
+
+    var host = document.getElementById('bjfToast');
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'bjfToast';
+      document.body.appendChild(host);
+    }
+    var total = wins.reduce(function (a, w) { return a + w.net; }, 0);
+    var best  = wins.reduce(function (a, w) { return w.mult > a.mult ? w : a; }, wins[0]);
+    // A 90:1 Super deserves more noise than a 5:1 mixed pair.
+    var loud  = best.mult >= 30;
+    var fmt   = (typeof money === 'function') ? money
+              : function (n) { return '£' + Math.abs(n); };
+
+    // ONE headline only. The toast floats over the table, and the dealer's
+    // up-card sits just below it — a line per win would grow tall enough to
+    // cover the one card the next decision depends on. Every win is listed in
+    // full in the note under the table; this is the glance, not the ledger.
+    host.className = loud ? 'loud' : '';
+    host.innerHTML =
+      '<div class="toast-card">'
+      + '<div class="toast-head">' + (loud ? 'BIG HIT' : 'SIDE BET HIT')
+        + (wins.length > 1
+            ? '<span class="toast-extra">+' + fmt(total) + ' across ' + wins.length + '</span>'
+            : (state.boxes.length > 1
+                ? '<span class="toast-extra">Box ' + best.box + '</span>' : ''))
+      + '</div>'
+      + '<div class="toast-line">'
+        + '<span class="toast-bet">' + best.name.toUpperCase() + '</span>'
+        + '<span class="toast-what">' + best.result + '</span>'
+        + '<span class="toast-net">+' + fmt(best.net) + '</span>'
+      + '</div>'
+      + '</div>';
+
+    host.classList.add('show');
+    clearTimeout(host._t);
+    host._t = setTimeout(function () { host.classList.remove('show'); }, TOAST_MS);
+  }
+
   function renderSequenceNote() {
     var dock = belowTableDock();
     if (!dock || typeof state === 'undefined' || !state.boxes) return;
@@ -485,7 +555,7 @@
     if (typeof originalDeal === 'function') {
       window.dealRound = function () {
         var r = originalDeal.apply(this, arguments);
-        try { announceNaturals(); badgeNaturals(); renderSequenceNote(); }
+        try { announceNaturals(); badgeNaturals(); renderSequenceNote(); showWinToast(); }
         catch (e) { /* cosmetic */ }
         return r;
       };
@@ -549,6 +619,32 @@
       + '.seq-cards .playing-card .corner.top{top:1px;left:2px}'
       + '.seq-cards .playing-card .corner.bottom{right:2px;bottom:1px}'
       + '.seq-cards .playing-card .center{font-size:11px}'
+      // WIN TOAST — fixed, so it is outside layout and cannot move a button;
+      // pointer-events:none, so it cannot swallow a tap meant for one either.
+      + '#bjfToast{position:fixed;left:50%;top:76px;transform:translate(-50%,-14px);'
+      + 'z-index:60;pointer-events:none;opacity:0;width:min(92vw,420px);'
+      + 'transition:opacity .18s ease,transform .18s ease}'
+      + '#bjfToast.show{opacity:1;transform:translate(-50%,0)}'
+      + '#bjfToast .toast-card{max-height:84px;overflow:hidden}'
+      + '@media(prefers-reduced-motion:reduce){#bjfToast{transition:none}}'
+      + '.toast-card{border-radius:14px;padding:9px 13px;'
+      + 'background:linear-gradient(180deg,#12805A,#0B5D3B);'
+      + 'box-shadow:0 14px 40px rgba(0,0,0,.34);border:1px solid rgba(255,255,255,.22);'
+      + 'color:#fff;display:grid;gap:4px}'
+      + '#bjfToast.loud .toast-card{background:linear-gradient(180deg,#F6E7B4,#D9B23A);'
+      + 'border-color:#B8901B;color:#4A3805}'
+      + '.toast-head{font-size:.63rem;font-weight:900;letter-spacing:.13em;opacity:.85;display:flex;justify-content:space-between;gap:10px}'
+      + '.toast-extra{font-weight:700;letter-spacing:.04em;opacity:.92}'
+      + '.toast-line{display:grid;grid-template-columns:auto 1fr auto;gap:9px;'
+      + 'align-items:baseline}'
+      + '.toast-bet{font-weight:900;font-size:.9rem;letter-spacing:.02em}'
+      + '.toast-what{font-size:.76rem;opacity:.85;min-width:0;overflow:hidden;'
+      + 'text-overflow:ellipsis;white-space:nowrap}'
+      + '.toast-net{font-weight:900;font-size:1rem;font-variant-numeric:tabular-nums}'
+      + '.toast-box{grid-column:1/-1;font-size:.64rem;opacity:.72;letter-spacing:.05em}'
+      + '.toast-total{border-top:1px solid rgba(255,255,255,.24);padding-top:6px;'
+      + 'font-weight:800;font-size:.82rem;text-align:right}'
+      + '#bjfToast.loud .toast-total{border-top-color:rgba(0,0,0,.18)}'
       + '.seq-main{display:grid;gap:5px;min-width:0;flex:1}'
       + '.seq-made{display:flex;align-items:center;gap:7px;flex-wrap:wrap}'
       // one line per staked side bet: what it was, how it landed, what it paid
