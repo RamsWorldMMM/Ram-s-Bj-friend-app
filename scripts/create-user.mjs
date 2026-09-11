@@ -9,7 +9,7 @@ import { writeFileSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const PBKDF2_ITERATIONS = 210_000;
+const PBKDF2_ITERATIONS = 100_000;   // Workers' ceiling — see src/auth.js
 const DB_NAME = 'rams-bj-friend';
 
 function arg(name) {

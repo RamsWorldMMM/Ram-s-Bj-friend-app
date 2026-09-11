@@ -1,22 +1,16 @@
 # ============================================================================
-#  READ THIS FIRST  —  DO NOT COPY THIS FILE OVER YOUR WORKING wrangler.toml
-# ============================================================================
-#  This copy comes from the author's machine. Two values below are placeholders
-#  and are WRONG for the live deployment:
+#  Cloudflare configuration.
 #
-#     database_id     -> "local-dev-placeholder"  (NOT the real D1 database)
-#     GCP_PROJECT_ID  -> may differ from the project you deployed with
+#  database_id below is a real D1 database on the account this was deployed
+#  from. It is an identifier, not a secret. If you deploy from a DIFFERENT
+#  Cloudflare account, this id will not resolve — create your own with
+#     npx wrangler d1 create rams-bj-friend
+#  and paste the returned id here.
 #
-#  If you already have a working wrangler.toml, KEEP YOURS and copy over
-#  everything else (public/, src/, schema.sql, tests/, package.json).
-#
-#  If you must use this file, replace database_id with the id from:
-#     npx wrangler d1 list
-#  Deploying with the placeholder will fail or point at the wrong database,
-#  and the app will look empty because none of the existing play is in it.
-#
-#  Secrets (AUTH_SECRET, GCP_SERVICE_ACCOUNT_JSON) live in Cloudflare, not
-#  here, and survive a redeploy untouched.
+#  Secrets are NOT in this file and never should be. Set them once per
+#  environment and they survive redeploys:
+#     npx wrangler secret put AUTH_SECRET
+#     npx wrangler secret put GCP_SERVICE_ACCOUNT_JSON
 # ============================================================================
 
 name = "rams-bj-friend"
@@ -36,7 +30,7 @@ binding = "ASSETS"
 [[d1_databases]]
 binding = "DB"
 database_name = "rams-bj-friend"
-database_id = "local-dev-placeholder"   # <-- REPLACE or keep your own file
+database_id = "e0a11dec-cf72-48a9-a11c-8a01a8dcaef0"
 
 [vars]
 VERTEX_LOCATION = "us-central1"

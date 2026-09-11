@@ -3,7 +3,12 @@
 
 const enc = new TextEncoder();
 
-export const PBKDF2_ITERATIONS = 210_000;
+// Cloudflare Workers' Web Crypto refuses PBKDF2 above 100,000 iterations:
+//   "Pbkdf2 failed: iteration counts above 100000 are not supported".
+// It is the platform ceiling, not a tuning choice — 210,000 deployed fine and
+// then failed every login at runtime. Existing rows keep their own stored
+// `iterations`, so old accounts still verify; only new hashes use this.
+export const PBKDF2_ITERATIONS = 100_000;
 const COOKIE_NAME = 'bjf_session';
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 
