@@ -609,6 +609,27 @@
   }
   window.BJF_OPEN_FOLD = openFold;
 
+  /* The "Next round" dock is fixed to the bottom of the screen, so the last
+   * thing on the page sits underneath it. Measured: the dock is 71px tall and
+   * covered 36px of the Session controls opener, which is why it could not be
+   * tapped open after a round.
+   *
+   * .settlement-panel already reserves 92px for this, but that only protects
+   * that one panel — not whatever happens to be last on the page. Reserve the
+   * space on <main> instead, and only while the dock is actually showing.
+   */
+  function watchBottomDock() {
+    var dock = document.getElementById('nextRoundDock');
+    if (!dock) return;
+    var sync = function () {
+      document.body.classList.toggle('bjf-dock-up', !dock.classList.contains('hidden'));
+    };
+    sync();
+    try {
+      new MutationObserver(sync).observe(dock, { attributes: true, attributeFilter: ['class'] });
+    } catch (e) { /* the initial sync still helps */ }
+  }
+
   function renderSequenceNote() {
     var dock = belowTableDock();
     if (!dock || typeof state === 'undefined' || !state.boxes) return;
@@ -872,6 +893,7 @@
     watchWagers();
     try { compactBettingHeader(); } catch (e) { /* cosmetic */ }
     try { foldLongPanels(); } catch (e) { /* cosmetic */ }
+    try { watchBottomDock(); } catch (e) { /* cosmetic */ }
 
     // Settlement decoration (items 5 and 7).
     var originalSettle = window.renderSettlement;
@@ -1120,6 +1142,7 @@
          squeezed it to its 42px minimum while "41.4%" needed 45px. */
       + '.ai-grade{flex:0 0 auto;white-space:nowrap;width:auto;padding:0 13px}'
       + '.ai-head{align-items:center}'
+      + 'body.bjf-dock-up main{padding-bottom:calc(96px + env(safe-area-inset-bottom))}'
       + '.seq-main{display:grid;gap:5px;min-width:0;flex:1}'
       + '.seq-made{display:flex;align-items:center;gap:7px;flex-wrap:wrap}'
       // one line per staked side bet: what it was, how it landed, what it paid
