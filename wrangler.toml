@@ -40,8 +40,13 @@ GCP_PROJECT_ID = "tryonme-20260731"     # <-- must match YOUR deployed project
 
 # Gemini 2.5 draws thinking tokens from the same budget as the answer, so
 # MAX_OUTPUT must cover both or the JSON is truncated mid-object.
-# Lower THINKING_BUDGET to trade some analysis depth for a faster response.
-VERTEX_MAX_OUTPUT_TOKENS = "12000"
+#
+# 12000 was not enough: 4096 of it went to thinking, leaving under 8000 for a
+# response schema with ten top-level sections, and a real session failed with
+# "truncated mid-JSON". Billing is per token GENERATED, not per token budgeted,
+# so headroom here costs nothing until it is used.
+# gemini-2.5-flash accepts up to 65535.
+VERTEX_MAX_OUTPUT_TOKENS = "32000"
 VERTEX_THINKING_BUDGET = "4096"
 
 # Secrets — never put these in this file. Set them with:
