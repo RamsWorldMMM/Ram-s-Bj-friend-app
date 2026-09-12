@@ -840,9 +840,12 @@
    */
   function injectPublishControl() {
     if (el('publishDataBtn')) return;
-    var reset = el('resetBtn');
-    var grid = reset && reset.closest ? reset.closest('.controls-grid') : null;
-    if (!grid) return;
+    // Sits directly above "Analyse with AI". Both hand the session over for
+    // review, so they belong together rather than one of them being down in
+    // Session controls among the bankroll and reset machinery.
+    var anchor = el('shareReportBtn');
+    var host = anchor && anchor.parentNode;
+    if (!host) return;
 
     var btn = document.createElement('button');
     btn.type = 'button';
@@ -851,14 +854,14 @@
     // data" describes plumbing; "Submit to ChatGPT" is the act he has in mind.
     btn.className = 'primary';
     btn.textContent = 'Submit to ChatGPT';
-    grid.appendChild(btn);
+    host.insertBefore(btn, anchor);
 
     var note = document.createElement('p');
     note.className = 'fine-print';
     note.id = 'publishNote';
     note.textContent = 'Sends your play to ChatGPT so it can review it. '
       + 'Press this after a session.';
-    grid.parentNode.insertBefore(note, grid.nextSibling);
+    host.insertBefore(note, anchor);
 
     btn.addEventListener('click', function () {
       if (!currentUser) { requireLogin(); return; }

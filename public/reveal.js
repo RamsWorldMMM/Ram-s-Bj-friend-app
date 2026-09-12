@@ -1109,6 +1109,8 @@
       + '#roundHistoryPanel .section-heading > div{min-width:0}'
       + '#aiPanel .section-heading button,#historyPanel .section-heading button,'
       + '#roundHistoryPanel .section-heading button{flex:0 0 auto;white-space:nowrap}'
+      + '#publishDataBtn{width:100%;min-height:50px;margin-top:10px}'
+      + '#publishNote{margin-top:7px}'
       + '.bjf-fold{margin-top:10px;border-top:1px solid var(--border,#E3E6EA);'
       + 'padding-top:8px}'
       + '.bjf-fold > summary{list-style:none;cursor:pointer;font-size:.8rem;'
