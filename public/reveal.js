@@ -468,6 +468,61 @@
     });
   }
 
+  /* ------------------------------------------------------ COLLAPSIBLE PANELS
+   * The page ran to 2,627px — 3.1 screens — with every panel fully expanded all
+   * the time, most of it detail Ram only wants occasionally. Everything below
+   * the Copy report button folds away, headings stay visible so he can see what
+   * is there, and each section opens on demand.
+   *
+   * Presentation only: nodes are moved, never rebuilt, so every id and every
+   * handler the app attached survives untouched.
+   */
+  function foldAfter(panel, anchorEl, label) {
+    if (!panel || panel.querySelector(':scope > .bjf-fold')) return;
+
+    var rest = [], seen = false;
+    Array.prototype.forEach.call(panel.children, function (child) {
+      if (seen) rest.push(child);
+      if (child === anchorEl) seen = true;
+    });
+    if (!rest.length) return;
+
+    var det = document.createElement('details');
+    det.className = 'bjf-fold';
+    var sum = document.createElement('summary');
+    sum.textContent = label;
+    det.appendChild(sum);
+    rest.forEach(function (el) { det.appendChild(el); });
+    panel.appendChild(det);
+  }
+
+  function foldLongPanels() {
+    var main = document.querySelector('main');
+    if (!main) return;
+
+    // Session analysis: the buttons stay out, the numbers and the raw report fold.
+    var report = document.getElementById('analysisReport');
+    var analysis = report && report.closest ? report.closest('section') : null;
+    if (analysis) {
+      foldAfter(analysis, analysis.querySelector('.section-heading'),
+                'Breakdown, mistakes and raw report');
+    }
+
+    [['aiPanel', 'AI analysis'],
+     ['historyPanel', 'Past sessions'],
+     ['roundHistoryPanel', 'Round history']].forEach(function (pair) {
+      var el = document.getElementById(pair[0]);
+      if (el) foldAfter(el, el.querySelector('.section-heading') || el.querySelector('h2'), pair[1]);
+    });
+
+    // Session controls is the last panel: bankroll, shuffle, reset, About.
+    var reset = document.getElementById('resetBtn');
+    var controls = reset && reset.closest ? reset.closest('section') : null;
+    if (controls) {
+      foldAfter(controls, controls.querySelector('h2'), 'Bankroll, shuffle and reset');
+    }
+  }
+
   function renderSequenceNote() {
     var dock = belowTableDock();
     if (!dock || typeof state === 'undefined' || !state.boxes) return;
@@ -730,6 +785,7 @@
     }
     watchWagers();
     try { compactBettingHeader(); } catch (e) { /* cosmetic */ }
+    try { foldLongPanels(); } catch (e) { /* cosmetic */ }
 
     // Settlement decoration (items 5 and 7).
     var originalSettle = window.renderSettlement;
@@ -913,6 +969,36 @@
       + '.active-mobile-box .card-row .playing-card{width:62px;height:91px;flex-basis:62px}'
       + '.active-mobile-box .card-row .playing-card .center{font-size:34px}'
       + '}'
+      /* Each folded panel still cost ~200px because its heading carried a
+         sentence explaining the section. They are one-time explanations paid
+         for on every scroll, every session. The headings stay; the prose goes. */
+      + '#aiPanel .section-heading p,'
+      + '#historyPanel .section-heading p,'
+      + '#roundHistoryPanel .section-heading p{display:none}'
+      /* Same trap as the betting panel: the phone media query sets
+         flex-direction:column here, which centres the title and drops the
+         button beneath it. Title left, control right. */
+      + '#aiPanel .section-heading,#historyPanel .section-heading,'
+      + '#roundHistoryPanel .section-heading{flex-direction:row;align-items:center;'
+      + 'justify-content:space-between;gap:10px;flex-wrap:nowrap}'
+      + '#aiPanel .section-heading h2,#historyPanel .section-heading h2,'
+      + '#roundHistoryPanel .section-heading h2{font-size:1rem;white-space:nowrap}'
+      + '#aiPanel .section-heading > div,#historyPanel .section-heading > div,'
+      + '#roundHistoryPanel .section-heading > div{min-width:0}'
+      + '#aiPanel .section-heading button,#historyPanel .section-heading button,'
+      + '#roundHistoryPanel .section-heading button{flex:0 0 auto;white-space:nowrap}'
+      + '.bjf-fold{margin-top:10px;border-top:1px solid var(--border,#E3E6EA);'
+      + 'padding-top:8px}'
+      + '.bjf-fold > summary{list-style:none;cursor:pointer;font-size:.8rem;'
+      + 'font-weight:700;color:var(--green,#0B5D3B);padding:9px 2px;min-height:40px;'
+      + 'display:flex;align-items:center;gap:7px}'
+      + '.bjf-fold > summary::-webkit-details-marker{display:none}'
+      + '.bjf-fold > summary::after{content:"\\203A";margin-left:auto;font-size:1.2rem;'
+      + 'transform:rotate(90deg);transition:transform .15s ease;opacity:.7}'
+      + '.bjf-fold[open] > summary::after{transform:rotate(-90deg)}'
+      + '.bjf-fold > summary:focus-visible{outline:2px solid var(--green,#0B5D3B);'
+      + 'outline-offset:2px;border-radius:6px}'
+      + '@media(prefers-reduced-motion:reduce){.bjf-fold > summary::after{transition:none}}'
       + '.seq-main{display:grid;gap:5px;min-width:0;flex:1}'
       + '.seq-made{display:flex;align-items:center;gap:7px;flex-wrap:wrap}'
       // one line per staked side bet: what it was, how it landed, what it paid
