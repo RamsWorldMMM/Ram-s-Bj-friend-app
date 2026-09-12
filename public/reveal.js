@@ -236,7 +236,7 @@
    * reserves the chip's height permanently. The badge appearing AND vanishing
    * three seconds later both leave Hit, Stand, Double and Split untouched.
    */
-  var BADGE_MS = 3000;
+  var BADGE_MS = 6000;   // Ram asked for longer — three seconds was too quick to register
   var badgeRound = null;
   var badgeExpired = false;
 
