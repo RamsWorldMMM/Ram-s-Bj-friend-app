@@ -448,8 +448,17 @@
         cell.classList.remove('paid', 'unplayed');
         if (key === 'main' || !side[key]) return;
         var r = side[key];
-        if (!r.stake) cell.classList.add('unplayed');      // never staked — recede it
-        else if (r.mult > 0) cell.classList.add('paid');   // it hit — lift it
+        if (!r.stake) {
+          // Never staked. "£0" is ambiguous — it reads as "I bet and got
+          // nothing back" when he did not bet at all. Say so, and keep it
+          // readable: an earlier pass faded these to 38% and they vanished.
+          cell.classList.add('unplayed');
+          Array.prototype.forEach.call(cell.childNodes, function (n) {
+            if (n.nodeType === 3 && n.textContent.trim()) n.textContent = 'not played';
+          });
+        } else if (r.mult > 0) {
+          cell.classList.add('paid');                      // it hit — lift it
+        }
       });
     });
     state.boxes.forEach(function (box, i) {
@@ -727,7 +736,8 @@
       // settlement breakdown: a bet that paid should not look like one that lost
       + '.compact-breakdown > div.paid{font-weight:800;color:var(--green,#0B5D3B)}'
       + '.compact-breakdown > div.paid span{color:var(--green,#0B5D3B);opacity:.85}'
-      + '.compact-breakdown > div.unplayed{opacity:.38}'
+      + '.compact-breakdown > div.unplayed{color:var(--muted,#6B7280);font-style:italic}'
+      + '.compact-breakdown > div.unplayed span{color:var(--muted,#6B7280)}'
       /* The box header reserves the badge's height ALWAYS, present or not, so a
          win appearing can never push the action buttons down. */
       + '.play-box h3{display:flex;align-items:center;gap:9px;min-height:30px;'
