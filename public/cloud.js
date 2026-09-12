@@ -847,37 +847,40 @@
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.id = 'publishDataBtn';
-    btn.className = 'secondary';
-    btn.textContent = 'Publish data for ChatGPT';
+    // Named for what he is doing, not for what the machine does. "Publish
+    // data" describes plumbing; "Submit to ChatGPT" is the act he has in mind.
+    btn.className = 'primary';
+    btn.textContent = 'Submit to ChatGPT';
     grid.appendChild(btn);
 
     var note = document.createElement('p');
     note.className = 'fine-print';
     note.id = 'publishNote';
-    note.textContent = 'Sends a summary of your play to the GitHub repository so '
-      + 'ChatGPT can read it. Press it after a session.';
+    note.textContent = 'Sends your play to ChatGPT so it can review it. '
+      + 'Press this after a session.';
     grid.parentNode.insertBefore(note, grid.nextSibling);
 
     btn.addEventListener('click', function () {
       if (!currentUser) { requireLogin(); return; }
       btn.disabled = true;
-      btn.textContent = 'Publishing…';
-      note.textContent = 'Sending your session data…';
+      btn.textContent = 'Sending…';
+      note.textContent = 'Sending your play to ChatGPT…';
       api('/api/publish', { method: 'POST' })
         .then(function (r) {
           var when = new Date(r.publishedAt);
-          note.textContent = 'Published ' + r.rounds + ' rounds from '
-            + r.sessions + ' session(s) at ' + when.toLocaleTimeString()
-            + '. ChatGPT will see this next time it reads the repository.';
+          note.textContent = 'Sent at ' + when.toLocaleTimeString() + '. ChatGPT '
+            + 'can now read ' + r.rounds + ' rounds from '
+            + r.sessions + ' session' + (r.sessions === 1 ? '' : 's')
+            + ' — ask it to review your play.';
         })
         .catch(function (err) {
-          note.textContent = 'Could not publish: '
+          note.textContent = 'Could not send: '
             + (err && err.message ? err.message : 'unknown error')
-            + '. Your play is still saved here.';
+            + '. Your play is still saved here — try again in a moment.';
         })
         .then(function () {
           btn.disabled = false;
-          btn.textContent = 'Publish data for ChatGPT';
+          btn.textContent = 'Submit to ChatGPT';
         });
     });
   }
