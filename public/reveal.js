@@ -360,20 +360,18 @@
       document.body.appendChild(el);
     }
 
-    // If the problem is simply not enough bankroll, the fix belongs here rather
-    // than down in Session controls. The panel is deliberately substantial: a
-    // thin strip read as a notification rather than as the thing to act on.
     var short = /bankroll/i.test(msg) ? bankrollShortfall() : 0;
     var exact = short > 0 ? Math.ceil(short / 500) * 500 : 0;
     var fmt = (typeof money === 'function') ? money
             : function (n) { return '£' + Math.abs(n); };
 
-    var opts = [];
+    // Choosing an amount and committing it are separate steps. Applying money
+    // on the first tap means a mis-tap silently changes the bankroll, and the
+    // player has no chance to see what he picked before it happens.
+    var options = [];
     if (exact) {
-      opts.push({ amt: exact, label: 'Add ' + fmt(exact), primary: true });
-      [1000, 2000].forEach(function (v) {
-        if (v !== exact) opts.push({ amt: v, label: fmt(v) });
-      });
+      options.push(exact);
+      [1000, 2000].forEach(function (v) { if (v !== exact) options.push(v); });
     }
 
     el.innerHTML = '<div class="wa-card">'
@@ -382,17 +380,16 @@
       + '<div><span class="wa-text"></span>'
       + (exact ? '<div class="wa-short"></div>' : '') + '</div></div>'
       + (exact
-          ? '<div class="wa-opts">'
-              + opts.map(function (o, i) {
-                  return '<button type="button" class="wa-add' + (o.primary ? ' pri' : '')
-                    + '" data-amt="' + o.amt + '">' + o.label + '</button>';
+          ? '<div class="wa-opts" role="group" aria-label="Choose an amount">'
+              + options.map(function (v, i) {
+                  return '<button type="button" class="wa-pick" data-amt="' + v + '"'
+                    + ' aria-pressed="' + (i === 0 ? 'true' : 'false') + '">'
+                    + fmt(v) + '</button>';
                 }).join('')
             + '</div>'
-            + '<div class="wa-custom">'
-              + '<input type="number" id="bjfCustomTopUp" inputmode="numeric" min="1" '
-              + 'step="100" placeholder="Other amount" />'
-              + '<button type="button" class="wa-add" data-amt="custom">Add</button>'
-            + '</div>'
+            + '<input type="number" id="bjfCustomTopUp" inputmode="numeric" min="1" '
+            + 'step="100" placeholder="Other amount" />'
+            + '<button type="button" class="wa-submit"></button>'
           : '')
       + '</div>';
     el.querySelector('.wa-text').textContent = msg;   // never inject as HTML
@@ -400,36 +397,59 @@
     el.querySelector('.wa-x').addEventListener('click', function () {
       el.classList.remove('show');
     });
-    // The backdrop closes it; the card must not, or typing an amount would.
     el.addEventListener('click', function (e) {
       if (e.target === el) el.classList.remove('show');
     });
     el.querySelector('.wa-card').addEventListener('click', function (e) {
       e.stopPropagation();
     });
+    if (!exact) { el.classList.add('show'); return; }
 
-    if (exact) {
-      el.querySelector('.wa-short').textContent = 'Short by ' + fmt(short);
-      var say = function (t) { el.querySelector('.wa-short').textContent = t; };
+    var shortEl = el.querySelector('.wa-short');
+    var input = el.querySelector('#bjfCustomTopUp');
+    var submit = el.querySelector('.wa-submit');
+    var chosen = exact;
 
-      Array.prototype.forEach.call(el.querySelectorAll('.wa-add'), function (btn) {
-        btn.addEventListener('click', function () {
-          var raw = btn.getAttribute('data-amt');
-          var amt = raw === 'custom'
-            ? Number((document.getElementById('bjfCustomTopUp') || {}).value)
-            : Number(raw);
-          if (!isFinite(amt) || amt <= 0) { say('Enter an amount above zero.'); return; }
-          var r = typeof window.BJF_ADD_CAPITAL === 'function'
-            ? window.BJF_ADD_CAPITAL(amt) : null;
-          if (r && r.ok) {
-            el.classList.remove('show');
-            if (typeof window.updateUI === 'function') window.updateUI();
-          } else {
-            say((r && r.why) || 'Could not add funds. Use Session controls below.');
-          }
+    var say = function (t) { shortEl.textContent = t; };
+    var refresh = function () {
+      submit.textContent = chosen > 0 ? 'Add ' + fmt(chosen) : 'Choose an amount';
+      submit.disabled = !(chosen > 0);
+    };
+    say('Short by ' + fmt(short));
+    refresh();
+
+    Array.prototype.forEach.call(el.querySelectorAll('.wa-pick'), function (b) {
+      b.addEventListener('click', function () {
+        chosen = Number(b.getAttribute('data-amt'));
+        input.value = '';
+        Array.prototype.forEach.call(el.querySelectorAll('.wa-pick'), function (o) {
+          o.setAttribute('aria-pressed', String(o === b));
         });
+        refresh();
       });
-    }
+    });
+
+    input.addEventListener('input', function () {
+      // Typing an amount deselects the presets: one selection at a time.
+      chosen = Number(input.value) || 0;
+      Array.prototype.forEach.call(el.querySelectorAll('.wa-pick'), function (o) {
+        o.setAttribute('aria-pressed', 'false');
+      });
+      refresh();
+    });
+
+    submit.addEventListener('click', function () {
+      if (!(chosen > 0)) { say('Choose an amount first.'); return; }
+      var r = typeof window.BJF_ADD_CAPITAL === 'function'
+        ? window.BJF_ADD_CAPITAL(chosen) : null;
+      if (r && r.ok) {
+        el.classList.remove('show');
+        if (typeof window.updateUI === 'function') window.updateUI();
+      } else {
+        say((r && r.why) || 'Could not add funds. Use Session controls below.');
+      }
+    });
+
     el.classList.add('show');
   }
 
@@ -1023,10 +1043,19 @@
       + '.wa-x:hover{background:rgba(155,44,44,.1)}'
       + '.wa-short{font-size:.78rem;font-weight:700;opacity:.85;margin-top:3px}'
       + '.wa-opts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}'
-      + '.wa-custom{display:grid;grid-template-columns:1fr auto;gap:8px}'
-      + '.wa-custom input{font:inherit;min-height:44px;border-radius:11px;'
+      + '#bjfCustomTopUp{font:inherit;min-height:44px;border-radius:11px;width:100%;'
       + 'border:1px solid #C98B8B;background:#fff;color:#7C2222;padding:0 12px;min-width:0}'
-      + '.wa-custom input::placeholder{color:#B98686}'
+      + '#bjfCustomTopUp::placeholder{color:#B98686}'
+      + '.wa-pick{font:inherit;font-size:.84rem;font-weight:800;min-height:44px;'
+      + 'border-radius:11px;border:1px solid #C98B8B;background:#fff;color:#9B2C2C;'
+      + 'cursor:pointer}'
+      + '.wa-pick[aria-pressed="true"]{background:#F3D3D3;border-color:#9B2C2C;'
+      + 'box-shadow:inset 0 0 0 1px #9B2C2C}'
+      + '.wa-submit{font:inherit;font-size:.92rem;font-weight:800;min-height:48px;'
+      + 'border-radius:12px;border:1px solid #7C2222;background:#9B2C2C;color:#fff;'
+      + 'cursor:pointer;width:100%}'
+      + '.wa-submit:hover{background:#7C2222}'
+      + '.wa-submit[disabled]{opacity:.5;cursor:default}'
       + '.wa-add{font:inherit;font-size:.84rem;font-weight:800;min-height:44px;'
       + 'padding:0 10px;border-radius:11px;border:1px solid #C98B8B;background:#fff;'
       + 'color:#9B2C2C;cursor:pointer;white-space:nowrap}'
