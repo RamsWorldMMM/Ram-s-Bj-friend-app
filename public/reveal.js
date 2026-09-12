@@ -357,40 +357,70 @@
       el = document.createElement('div');
       el.id = 'bjfWagerAlert';
       el.setAttribute('role', 'alert');
-      el.addEventListener('click', function () { el.classList.remove('show'); });
       document.body.appendChild(el);
     }
 
-    // If the problem is simply not enough bankroll, the fix belongs right here
-    // rather than down in Session controls. Offer the exact shortfall, rounded
-    // up to the nearest £500 so the number is one he would actually buy in for.
+    // If the problem is simply not enough bankroll, the fix belongs here rather
+    // than down in Session controls. The panel is deliberately substantial: a
+    // thin strip read as a notification rather than as the thing to act on.
     var short = /bankroll/i.test(msg) ? bankrollShortfall() : 0;
-    var topUp = short > 0 ? Math.ceil(short / 500) * 500 : 0;
+    var exact = short > 0 ? Math.ceil(short / 500) * 500 : 0;
     var fmt = (typeof money === 'function') ? money
             : function (n) { return '£' + Math.abs(n); };
 
-    el.innerHTML = '<div class="wa-card"><span class="wa-mark">!</span>'
-      + '<div class="wa-body"><span class="wa-text"></span>'
-      + (topUp ? '<div class="wa-fix"><span class="wa-short"></span>'
-                 + '<button type="button" class="wa-add"></button></div>' : '')
-      + '</div></div>';
+    var opts = [];
+    if (exact) {
+      opts.push({ amt: exact, label: 'Add ' + fmt(exact), primary: true });
+      [1000, 2000].forEach(function (v) {
+        if (v !== exact) opts.push({ amt: v, label: fmt(v) });
+      });
+    }
+
+    el.innerHTML = '<div class="wa-card">'
+      + '<button type="button" class="wa-x" aria-label="Dismiss">&times;</button>'
+      + '<div class="wa-top"><span class="wa-mark">!</span>'
+      + '<div><span class="wa-text"></span>'
+      + (exact ? '<div class="wa-short"></div>' : '') + '</div></div>'
+      + (exact
+          ? '<div class="wa-opts">'
+              + opts.map(function (o, i) {
+                  return '<button type="button" class="wa-add' + (o.primary ? ' pri' : '')
+                    + '" data-amt="' + o.amt + '">' + o.label + '</button>';
+                }).join('')
+            + '</div>'
+            + '<div class="wa-custom">'
+              + '<input type="number" id="bjfCustomTopUp" inputmode="numeric" min="1" '
+              + 'step="100" placeholder="Other amount" />'
+              + '<button type="button" class="wa-add" data-amt="custom">Add</button>'
+            + '</div>'
+          : '')
+      + '</div>';
     el.querySelector('.wa-text').textContent = msg;   // never inject as HTML
 
-    if (topUp) {
+    el.querySelector('.wa-x').addEventListener('click', function () {
+      el.classList.remove('show');
+    });
+
+    if (exact) {
       el.querySelector('.wa-short').textContent = 'Short by ' + fmt(short);
-      var btn = el.querySelector('.wa-add');
-      btn.textContent = 'Add ' + fmt(topUp);
-      btn.addEventListener('click', function (e) {
-        e.stopPropagation();                       // not the dismiss handler
-        var r = typeof window.BJF_ADD_CAPITAL === 'function'
-          ? window.BJF_ADD_CAPITAL(topUp) : null;
-        if (r && r.ok) {
-          el.classList.remove('show');
-          if (typeof window.updateUI === 'function') window.updateUI();
-        } else {
-          el.querySelector('.wa-short').textContent =
-            (r && r.why) || 'Could not add funds. Use Session controls below.';
-        }
+      var say = function (t) { el.querySelector('.wa-short').textContent = t; };
+
+      Array.prototype.forEach.call(el.querySelectorAll('.wa-add'), function (btn) {
+        btn.addEventListener('click', function () {
+          var raw = btn.getAttribute('data-amt');
+          var amt = raw === 'custom'
+            ? Number((document.getElementById('bjfCustomTopUp') || {}).value)
+            : Number(raw);
+          if (!isFinite(amt) || amt <= 0) { say('Enter an amount above zero.'); return; }
+          var r = typeof window.BJF_ADD_CAPITAL === 'function'
+            ? window.BJF_ADD_CAPITAL(amt) : null;
+          if (r && r.ok) {
+            el.classList.remove('show');
+            if (typeof window.updateUI === 'function') window.updateUI();
+          } else {
+            say((r && r.why) || 'Could not add funds. Use Session controls below.');
+          }
+        });
       });
     }
     el.classList.add('show');
@@ -898,24 +928,34 @@
       + '.won-amt{font-size:.8rem}'
       + '.play-box h3{gap:7px;font-size:.9rem}'
       + '}'
-      + '#bjfWagerAlert{position:fixed;left:50%;top:78px;transform:translate(-50%,-10px);'
+      + '#bjfWagerAlert{position:fixed;left:50%;top:74px;transform:translate(-50%,-10px);'
       + 'z-index:70;width:min(94vw,440px);opacity:0;pointer-events:none;'
       + 'transition:opacity .16s ease,transform .16s ease}'
-      + '#bjfWagerAlert.show{opacity:1;transform:translate(-50%,0);pointer-events:auto;cursor:pointer}'
+      + '#bjfWagerAlert.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}'
       + '@media(prefers-reduced-motion:reduce){#bjfWagerAlert{transition:none}}'
-      + '.wa-card{display:flex;align-items:flex-start;gap:10px;border-radius:13px;'
-      + 'padding:12px 14px;background:linear-gradient(180deg,#FFF3F3,#FBE2E2);'
-      + 'border:1px solid #C98B8B;box-shadow:0 12px 34px rgba(0,0,0,.26);color:#7C2222}'
-      + '.wa-mark{flex:0 0 21px;width:21px;height:21px;border-radius:50%;background:#9B2C2C;'
-      + 'color:#fff;font-weight:900;font-size:.82rem;display:grid;place-items:center;line-height:1}'
-      + '.wa-body{display:grid;gap:8px;min-width:0}'
-      + '.wa-text{font-size:.88rem;font-weight:600;line-height:1.35}'
-      + '.wa-fix{display:flex;align-items:center;gap:10px;flex-wrap:wrap}'
-      + '.wa-short{font-size:.78rem;font-weight:700;opacity:.85}'
-      + '.wa-add{font:inherit;font-size:.82rem;font-weight:800;min-height:40px;'
-      + 'padding:0 14px;border-radius:10px;border:1px solid #7C2222;'
-      + 'background:#9B2C2C;color:#fff;cursor:pointer;white-space:nowrap}'
-      + '.wa-add:hover{background:#7C2222}'
+      + '.wa-card{position:relative;display:grid;gap:9px;border-radius:16px;'
+      + 'padding:13px 14px 14px;background:linear-gradient(180deg,#FFF4F4,#FBE4E4);'
+      + 'border:1px solid #C98B8B;box-shadow:0 18px 48px rgba(0,0,0,.3);color:#7C2222}'
+      + '.wa-top{display:flex;align-items:flex-start;gap:10px;padding-right:22px}'
+      + '.wa-mark{flex:0 0 22px;width:22px;height:22px;border-radius:50%;background:#9B2C2C;'
+      + 'color:#fff;font-weight:900;font-size:.84rem;display:grid;place-items:center;line-height:1}'
+      + '.wa-text{font-size:.88rem;font-weight:700;line-height:1.3;display:block}'
+      + '.wa-x{position:absolute;top:8px;right:9px;width:28px;height:28px;border:0;'
+      + 'background:transparent;color:#9B2C2C;font-size:1.3rem;line-height:1;cursor:pointer;'
+      + 'border-radius:8px}'
+      + '.wa-x:hover{background:rgba(155,44,44,.1)}'
+      + '.wa-short{font-size:.78rem;font-weight:700;opacity:.85;margin-top:3px}'
+      + '.wa-opts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}'
+      + '.wa-custom{display:grid;grid-template-columns:1fr auto;gap:8px}'
+      + '.wa-custom input{font:inherit;min-height:44px;border-radius:11px;'
+      + 'border:1px solid #C98B8B;background:#fff;color:#7C2222;padding:0 12px;min-width:0}'
+      + '.wa-custom input::placeholder{color:#B98686}'
+      + '.wa-add{font:inherit;font-size:.84rem;font-weight:800;min-height:44px;'
+      + 'padding:0 10px;border-radius:11px;border:1px solid #C98B8B;background:#fff;'
+      + 'color:#9B2C2C;cursor:pointer;white-space:nowrap}'
+      + '.wa-add.pri{background:#9B2C2C;border-color:#7C2222;color:#fff}'
+      + '.wa-add:hover{background:#F6DADA}'
+      + '.wa-add.pri:hover{background:#7C2222}'
             /* index.html's phone media query sets flex-direction:column here, which
          is what stacked the title above the pill. Override the direction too,
          not just the alignment. */
