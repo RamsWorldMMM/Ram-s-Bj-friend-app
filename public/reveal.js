@@ -289,6 +289,56 @@
     host.appendChild(strip);
   }
 
+  /* ------------------------------------------------------- WAGER WARNING
+   * "Total committed exceeds the available bankroll" renders at the BOTTOM of
+   * the betting panel, just above the Deal button. On a phone, with the wager
+   * cards scrolled, it is off-screen — so pressing Deal appears to do nothing
+   * at all and there is no clue why.
+   *
+   * Mirror it to the top of the screen where it cannot be missed. Unlike the
+   * win banner, which was removed, this one is EARNED: it is blocking, the
+   * player asked for it, and the betting screen has no action buttons beneath
+   * it to displace. It is fixed, so it shifts nothing, and it clears the moment
+   * a wager is touched or a round deals.
+   */
+  function wagerAlert(msg) {
+    var el = document.getElementById('bjfWagerAlert');
+    if (!msg) { if (el) el.classList.remove('show'); return; }
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'bjfWagerAlert';
+      el.setAttribute('role', 'alert');
+      el.addEventListener('click', function () { el.classList.remove('show'); });
+      document.body.appendChild(el);
+    }
+    el.innerHTML = '<div class="wa-card"><span class="wa-mark">!</span>'
+      + '<span class="wa-text"></span></div>';
+    el.querySelector('.wa-text').textContent = msg;   // never inject the message as HTML
+    el.classList.add('show');
+  }
+
+  function mirrorWagerWarning() {
+    var w = document.getElementById('warning');
+    if (!w) return;
+    var live = !w.classList.contains('hidden') && w.textContent.trim();
+    wagerAlert(live ? w.textContent.trim() : '');
+  }
+
+  function watchWagers() {
+    var panel = document.getElementById('bettingPanel');
+    if (!panel) return;
+    // Any adjustment means he is acting on it — take the warning away.
+    ['input', 'change', 'click'].forEach(function (ev) {
+      panel.addEventListener(ev, function (e) {
+        // Deal itself lives inside this panel. Clicking it must NOT count as
+        // acting on the warning — that is the very click that raises it.
+        var t = e.target;
+        if (t && t.closest && t.closest('#dealBtn')) return;
+        wagerAlert('');
+      }, true);
+    });
+  }
+
   function renderSequenceNote() {
     var dock = belowTableDock();
     if (!dock || typeof state === 'undefined' || !state.boxes) return;
@@ -584,6 +634,17 @@
       };
     }
 
+    // Deal-time wager validation writes into #warning at the foot of the panel.
+    var originalValidate = window.validateWagers;
+    if (typeof originalValidate === 'function') {
+      window.validateWagers = function () {
+        var ok = originalValidate.apply(this, arguments);
+        try { mirrorWagerWarning(); } catch (e) { /* cosmetic */ }
+        return ok;
+      };
+    }
+    watchWagers();
+
     // Settlement decoration (items 5 and 7).
     var originalSettle = window.renderSettlement;
     if (typeof originalSettle === 'function') {
@@ -598,8 +659,14 @@
     var originalDeal = window.dealRound;
     if (typeof originalDeal === 'function') {
       window.dealRound = function () {
+        // A REJECTED deal returns immediately, leaving the warning it just
+        // raised. Only a deal that actually happened should clear it.
+        var before = (typeof state !== 'undefined') ? state.rounds : null;
         var r = originalDeal.apply(this, arguments);
+        var dealt = (typeof state !== 'undefined') && state.rounds !== before;
+        if (!dealt) return r;
         try {
+          wagerAlert('');
           announceNaturals(); badgeNaturals(); badgeSideBetWins();
           renderSequenceNote();
         } catch (e) { /* cosmetic */ }
@@ -693,6 +760,17 @@
       + '.won-amt{font-size:.8rem}'
       + '.play-box h3{gap:7px;font-size:.9rem}'
       + '}'
+      + '#bjfWagerAlert{position:fixed;left:50%;top:78px;transform:translate(-50%,-10px);'
+      + 'z-index:70;width:min(94vw,440px);opacity:0;pointer-events:none;'
+      + 'transition:opacity .16s ease,transform .16s ease}'
+      + '#bjfWagerAlert.show{opacity:1;transform:translate(-50%,0);pointer-events:auto;cursor:pointer}'
+      + '@media(prefers-reduced-motion:reduce){#bjfWagerAlert{transition:none}}'
+      + '.wa-card{display:flex;align-items:flex-start;gap:10px;border-radius:13px;'
+      + 'padding:12px 14px;background:linear-gradient(180deg,#FFF3F3,#FBE2E2);'
+      + 'border:1px solid #C98B8B;box-shadow:0 12px 34px rgba(0,0,0,.26);color:#7C2222}'
+      + '.wa-mark{flex:0 0 21px;width:21px;height:21px;border-radius:50%;background:#9B2C2C;'
+      + 'color:#fff;font-weight:900;font-size:.82rem;display:grid;place-items:center;line-height:1}'
+      + '.wa-text{font-size:.88rem;font-weight:600;line-height:1.35}'
       + '.seq-main{display:grid;gap:5px;min-width:0;flex:1}'
       + '.seq-made{display:flex;align-items:center;gap:7px;flex-wrap:wrap}'
       // one line per staked side bet: what it was, how it landed, what it paid
