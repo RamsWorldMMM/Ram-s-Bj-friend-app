@@ -1279,7 +1279,59 @@
     document.head.appendChild(st);
   }
 
+  /* ONE-SHOT FRESH START
+   *
+   * The stored history was cleared on the server before the app was handed
+   * over, but the browser keeps its own copy in three places and would put it
+   * straight back:
+   *
+   *   ramsBjFriendBetaV14  the engine's saved board — bankroll, shoe, state
+   *   bjfRoundLog          the per-round log the export and digests are built from
+   *   bjfCloudMeta         the cloud session id
+   *
+   * The session id is the one that actually bites: cloud.js reads it at load
+   * and holds it in a closure, so a deleted row is simply re-uploaded under the
+   * same id on the next sync. Removing the key is not enough — the running
+   * copy has to be replaced, which is what startNewCloudSession() does, and it
+   * resets the round log on the way through. bjfLiveAskSuits is a preference,
+   * not history, so it is left alone.
+   *
+   * Runs once per browser. The stamp is written BEFORE anything is cleared and
+   * read back to confirm it stuck: if storage is unavailable the reset must not
+   * run at all, or a stamp that never persists would wipe the board on every
+   * single load. Deferred to 'load' so cloud.js has finished booting and its
+   * globals exist.
+   */
+  var FRESH_START_STAMP = 'bjfFreshStart-2026-09-12';
+
+  function freshStartOnce() {
+    var ls;
+    try { ls = window.localStorage; } catch (e) { return; }   // blocked storage
+    if (!ls) return;
+    try {
+      if (ls.getItem(FRESH_START_STAMP)) return;              // already done here
+      ls.setItem(FRESH_START_STAMP, '1');
+      if (ls.getItem(FRESH_START_STAMP) !== '1') return;      // the write did not stick
+    } catch (e) { return; }
+
+    try {
+      ls.removeItem('ramsBjFriendBetaV14');
+      if (typeof window.resetSession === 'function') window.resetSession();
+    } catch (e) { /* a stale board beats a broken one */ }
+
+    try {
+      ls.removeItem('bjfRoundLog');
+      if (typeof window.startNewCloudSession === 'function') window.startNewCloudSession();
+    } catch (e) { /* history stays local rather than breaking the page */ }
+  }
+
+  function scheduleFreshStart() {
+    if (document.readyState === 'complete') setTimeout(freshStartOnce, 0);
+    else window.addEventListener('load', function () { setTimeout(freshStartOnce, 0); });
+  }
+
   function boot() {
+    scheduleFreshStart();
     injectStyles();
     relocateTopBanners();
     install();

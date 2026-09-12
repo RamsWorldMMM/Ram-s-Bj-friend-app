@@ -21,6 +21,10 @@ It states the things that are easy to get wrong, notably:
 - Side bets are settled the instant the cards are dealt, before any player
   decision, so nothing about how a hand was played can affect them.
 
+When the files show zero sessions, no play has been published yet — that is an
+empty record, not a record of losing. Say so rather than reporting the zeros
+as results.
+
 `generated_at` inside each file is when it was published. If that date is old,
 the play since then is not in here — say so rather than reporting stale figures
 as current.
