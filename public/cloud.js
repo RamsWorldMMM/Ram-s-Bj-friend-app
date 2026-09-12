@@ -16,7 +16,7 @@
   'use strict';
 
   var META_KEY = 'bjfCloudMeta';
-  var APP_VERSION = "Ram's BJ Friend v1.4.6";
+  var APP_VERSION = "Ram's BJ Friend v1.4.7";
   var STRATEGY_VERSION = "HIP-ENHC-S17-v1";
   var RULES_PROFILE = "6D / S17 / ENHC-full-loss / DOA / DAS";
   var API = {

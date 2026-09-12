@@ -64,7 +64,7 @@ async function route(request, env, ctx, url) {
       ok: schema.ok,
       llm: env.MOCK_LLM === '1' ? 'mock' : 'vertex-ai',
       model: env.VERTEX_MODEL || 'gemini-2.5-flash',
-      appVersion: '1.4.6',
+      appVersion: '1.4.7',
       schema,
     });
   }
