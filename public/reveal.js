@@ -263,9 +263,19 @@
     clearWinStrips();
     if (badgeExpired) return;
 
+    // A natural is the biggest news on the table, so it leads the strip. It
+    // used to announce itself in the dock below on a 2.6s timer of its own;
+    // one place and one duration is easier to learn than two.
+    var naturals = [];
+    state.boxes.forEach(function (box) {
+      box.hands.forEach(function (hand) {
+        if (isNatural(hand)) naturals.push(box.number);
+      });
+    });
+
     var wins = [];
     state.boxes.forEach(function (box) { wins = wins.concat(sideBetWins(box)); });
-    if (!wins.length) return;
+    if (!wins.length && !naturals.length) return;
 
     // Whichever box the player is actually looking at.
     var host = document.querySelector('#boxDisplay .active-mobile-box h3')
@@ -276,16 +286,41 @@
     var fmt = (typeof money === 'function') ? money
             : function (n) { return '£' + Math.abs(n); };
 
+    // ENHC: with an Ace or ten-value up-card the dealer can still make a
+    // natural and push this hand. Do not promise 3:2 until that is resolved.
+    var pending = dealerMayHaveNatural();
+    var bjHtml = naturals.map(function (n) {
+      return '<span class="won-chip bj">'
+        + (many ? '<span class="won-box">B' + n + '</span>' : '')
+        + '<span class="won-bet">BLACKJACK</span>'
+        + '<span class="won-said">' + (pending ? 'MAY PUSH' : 'PAYS 3:2') + '</span>'
+        + '</span>';
+    }).join('');
+
+    // Space is tight beside the box name. One chip can spell itself out; two or
+    // more have to give up the words to fit, and past two we count the rest
+    // rather than clip an amount in half.
+    var total = naturals.length + wins.length;
+    // One headline plus a count. Two full chips needed 292px and only had 247
+    // on a 360px phone, so an amount got cut in half. Every win is itemised in
+    // the note under the table; this is the glance, not the ledger.
+    var MAX = 1;
+    var shownWins = wins.slice(0, Math.max(0, MAX - naturals.length));
+    var hidden = total - naturals.length - shownWins.length;
+
     var strip = document.createElement('span');
-    strip.className = 'won-strip';
-    strip.innerHTML = wins.map(function (w) {
+    strip.className = 'won-strip' + (total > 1 ? ' tight' : '');
+    strip.innerHTML = bjHtml + shownWins.map(function (w) {
       return '<span class="won-chip' + (w.mult >= 30 ? ' big' : '') + '">'
         + (many ? '<span class="won-box">B' + w.box + '</span>' : '')
-        + '<span class="won-bet">' + w.name.toUpperCase() + '</span>'
+        + '<span class="won-bet">'
+          + (total > 1 ? w.name.replace(/^Trilux /, '').toUpperCase() : w.name.toUpperCase())
+          + '</span>'
         + '<span class="won-said">WON</span>'
         + '<span class="won-amt">' + fmt(w.net) + '</span>'
         + '</span>';
-    }).join('');
+    }).join('')
+      + (hidden > 0 ? '<span class="won-chip more">+' + hidden + '</span>' : '');
     host.appendChild(strip);
   }
 
@@ -442,50 +477,6 @@
       ? '<div class="seq-title">What the cards made'
         + '<span class="seq-when">settled at deal</span></div>' + rows.join('')
       : '';
-  }
-
-  function announceNaturals() {
-    if (typeof state === 'undefined' || !state.boxes) return;
-    var hits = [];
-    state.boxes.forEach(function (box) {
-      box.hands.forEach(function (hand) {
-        if (isNatural(hand)) hits.push({ box: box.number, cards: hand.cards });
-      });
-    });
-    if (!hits.length) return;
-
-    var host = document.getElementById('bjAnnounce');
-    if (!host) {
-      host = document.createElement('div');
-      host.id = 'bjAnnounce';
-      // Was table.insertBefore(host, table.firstChild) — i.e. directly above
-      // the buttons. That is the 80px shove; it lives in the dock now.
-      var dock = belowTableDock();
-      if (!dock) return;
-      dock.appendChild(host);
-    }
-    // ENHC: with an Ace or ten-value up-card the dealer may still make a
-    // natural, which would push this hand. Do not promise 3:2 until that is
-    // resolved (Ram's ENHC dealer-natural brief).
-    var pending = dealerMayHaveNatural();
-    host.innerHTML = hits.map(function (h) {
-      var cards = h.cards.map(function (c) {
-        return typeof cardHTML === 'function' ? cardHTML(c) : '';
-      }).join('');
-      return '<div class="bj-shout' + (pending ? ' pending' : '') + '">' +
-        '<span class="bj-box">Box ' + h.box + '</span>' +
-        '<span class="bj-cards">' + cards + '</span>' +
-        '<span class="bj-word">BLACKJACK</span>' +
-        '<span class="bj-pay">' + (pending
-          ? 'awaiting dealer check — may push'
-          : 'pays 3:2') + '</span></div>';
-    }).join('');
-    host.classList.remove('hidden');
-    host.classList.add('show');
-
-    clearTimeout(host._t);
-    host._t = setTimeout(function () { host.classList.remove('show'); }, 2600);
-    host.onclick = function () { host.classList.remove('show'); };
   }
 
   /**
@@ -723,7 +714,7 @@
         if (!dealt) return r;
         try {
           wagerAlert('');
-          announceNaturals(); badgeNaturals(); badgeSideBetWins();
+          badgeNaturals(); badgeSideBetWins();
           renderSequenceNote(); trimIdleFeedback();
         } catch (e) { /* cosmetic */ }
         return r;
@@ -744,25 +735,6 @@
       + '.bj-badge{display:inline-block;background:linear-gradient(180deg,#D9B23A,#B8901B);'
       + 'color:#fff;font-weight:800;font-size:.66rem;letter-spacing:.06em;'
       + 'border-radius:999px;padding:3px 9px;margin-bottom:2px;align-self:start}'
-      // announcement strip at the top of the felt
-      + '#bjAnnounce{display:none}'
-      + '#bjAnnounce.show{display:grid;gap:7px;margin-bottom:10px;animation:bjPop .3s ease-out}'
-      + '.bj-shout{display:flex;align-items:center;gap:9px;flex-wrap:wrap;'
-      + 'background:linear-gradient(180deg,#FFF7DC,#F6E7B4);border:2px solid var(--gold);'
-      + 'border-radius:14px;padding:9px 12px;box-shadow:0 6px 18px rgba(0,0,0,.22);cursor:pointer}'
-      + '.bj-box{font-size:.74rem;font-weight:700;color:#7A5E06;text-transform:uppercase;letter-spacing:.06em}'
-      + '.bj-cards{display:inline-flex;gap:4px}'
-      + '.bj-cards .playing-card{width:34px;height:48px;flex:0 0 34px;border-radius:5px;padding:2px}'
-      + '.bj-cards .playing-card .corner{font-size:8px;line-height:.9}'
-      + '.bj-cards .playing-card .corner.top{top:2px;left:3px}'
-      + '.bj-cards .playing-card .corner.bottom{right:3px;bottom:2px}'
-      + '.bj-cards .playing-card .center{font-size:15px}'
-      + '.bj-word{font-weight:900;letter-spacing:.05em;color:#7A5E06;font-size:.95rem}'
-      + '.bj-pay{font-size:.7rem;color:#8A6E12;font-weight:700}'
-      // pending state: the dealer may still make a natural, so no promise
-      + '.bj-shout.pending{background:linear-gradient(180deg,#FFF9E8,#F3E9CE);'
-      + 'border-style:dashed}'
-      + '.bj-shout.pending .bj-pay{color:#8A6E12;font-weight:600;font-style:italic}'
       + '.bj-badge.pending{background:linear-gradient(180deg,#B9A050,#947B2E)}'
       + '@keyframes bjPop{from{transform:translateY(-6px);opacity:0}to{transform:none;opacity:1}}'
       // the dock: everything that used to sit above the buttons
@@ -796,6 +768,7 @@
       /* The box header reserves the badge's height ALWAYS, present or not, so a
          win appearing can never push the action buttons down. */
       + '.play-box h3{display:flex;align-items:center;gap:9px;min-height:30px;'
+      + 'white-space:nowrap;'
       + 'flex-wrap:nowrap;overflow:hidden}'
       + '.won-strip{display:inline-flex;gap:6px;min-width:0;overflow:hidden;'
       + 'flex-wrap:nowrap}'
@@ -803,10 +776,19 @@
       + 'background:linear-gradient(180deg,#12885F,#0B5D3B);color:#fff;'
       + 'border-radius:8px;padding:4px 9px;box-shadow:0 2px 6px rgba(11,93,59,.34);'
       + 'font-size:.74rem;line-height:1}'
+      + '.won-chip.bj{background:linear-gradient(180deg,#F3DE9A,#D9B23A);color:#3A2B04;'
+      + 'box-shadow:0 2px 10px rgba(184,144,27,.45)}'
+      + '.won-chip.bj .won-said{opacity:.8;font-weight:800}'
       + '.won-chip.big{background:linear-gradient(180deg,#E0B63F,#B8901B);color:#2E2205;'
       + 'box-shadow:0 2px 8px rgba(184,144,27,.4)}'
       + '.won-box{font-weight:800;opacity:.7;font-size:.64rem;letter-spacing:.04em}'
       + '.won-bet{font-weight:800;letter-spacing:.04em}'
+      /* Two chips or more: drop the words, keep the bet and the money. */
+      + '.won-strip.tight .won-said{display:none}'
+      + '.won-strip.tight .won-chip{padding:4px 7px;gap:4px;font-size:.66rem}'
+      + '.won-strip.tight .won-amt{font-size:.76rem}'
+      + '.won-chip.more{background:rgba(0,0,0,.16);color:inherit;font-weight:800;'
+      + 'box-shadow:none;border:1px solid rgba(0,0,0,.14)}'
       + '.won-said{font-weight:700;opacity:.75;font-size:.66rem;letter-spacing:.08em}'
       + '.won-amt{font-weight:900;font-variant-numeric:tabular-nums;font-size:.86rem}'
       /* "WON" is the whole point — it is what makes the chip read as a win
