@@ -376,6 +376,24 @@
     }
   }
 
+  /* "Choose your action." sits under the buttons on every hand and says nothing
+   * — the four buttons directly above it already say it. It is never updated
+   * after render either: nothing in the app writes to this element again.
+   *
+   * Hide that one string and spend the height on the cards. The split-aces
+   * message uses the same element and IS informative, so it stays.
+   *
+   * This element is BELOW the action buttons, so hiding or showing it can never
+   * move them.
+   */
+  function trimIdleFeedback() {
+    var nodes = document.querySelectorAll('#boxDisplay .feedback');
+    Array.prototype.forEach.call(nodes, function (el) {
+      var t = (el.textContent || '').trim();
+      el.classList.toggle('bjf-idle', t === 'Choose your action.');
+    });
+  }
+
   function renderSequenceNote() {
     var dock = belowTableDock();
     if (!dock || typeof state === 'undefined' || !state.boxes) return;
@@ -666,7 +684,7 @@
         var r = originalRender.apply(this, arguments);
         if (pausing) { disableActions(); flagLastCard(); }
         badgeNaturals();
-        try { badgeSideBetWins(); } catch (e) { /* cosmetic */ }
+        try { badgeSideBetWins(); trimIdleFeedback(); } catch (e) { /* cosmetic */ }
         return r;
       };
     }
@@ -706,7 +724,7 @@
         try {
           wagerAlert('');
           announceNaturals(); badgeNaturals(); badgeSideBetWins();
-          renderSequenceNote();
+          renderSequenceNote(); trimIdleFeedback();
         } catch (e) { /* cosmetic */ }
         return r;
       };
@@ -860,6 +878,12 @@
       + '.play-box{padding:10px;gap:8px}'
       + '.hand-card{padding:9px;gap:7px}'
       + '.action-grid button{padding:9px}'
+      + '}'
+      + '.feedback.bjf-idle{display:none}'
+      /* Height freed by the idle prompt goes to the player's cards. */
+      + '@media(min-height:701px){'
+      + '.active-mobile-box .card-row .playing-card{width:62px;height:91px;flex-basis:62px}'
+      + '.active-mobile-box .card-row .playing-card .center{font-size:34px}'
       + '}'
       + '.seq-main{display:grid;gap:5px;min-width:0;flex:1}'
       + '.seq-made{display:flex;align-items:center;gap:7px;flex-wrap:wrap}'
