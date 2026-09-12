@@ -826,6 +826,41 @@
       + '#bjfSetupRow .compact-field select{min-height:44px}'
       + '#bjfSetupRow .bet-actions{flex:0 0 auto;margin:0}'
       + '#bjfSetupRow .bet-actions button{min-height:44px;white-space:nowrap}'
+            /* ------------------------------------------------- PLAY SCREEN BALANCE
+         Measured at 390x860: the box chips took 54px and the dealer's card —
+         the single input every decision turns on — was 73px, SMALLER than the
+         player's own cards at 79px. The chips are set disabled in renderTable:
+         they are status indicators, not controls, so they never needed a 44px
+         thumb target.
+
+         Spend that height on the card instead. */
+      + '#playBoxTabs.box-tabs{gap:6px}'
+      + '#playBoxTabs.box-tabs button{min-height:0;padding:5px 10px;'
+      + 'font-size:.78rem;border-radius:999px;cursor:default}'
+      /* The dealer's up-card leads the decision, so let it lead the screen. */
+      + '#dealerCards .playing-card{width:68px;height:99px;flex-basis:68px;'
+      + 'border-radius:11px;box-shadow:0 6px 16px rgba(0,0,0,.34)}'
+      + '#dealerCards .playing-card .center{font-size:38px}'
+      + '#dealerCards .playing-card .corner{font-size:17px}'
+      /* Trim the furniture around it, not the card. */
+      + '.dealer-area .table-label{padding:2px 10px;font-size:.66rem}'
+      + '#dealerTotal{font-size:.74rem;margin-top:2px}'
+      + '#focusContext.focus-context{padding:5px 12px;font-size:.78rem;'
+      + 'margin-bottom:7px}'
+      + '.feedback{padding:7px 9px;font-size:.75rem}'
+      /* Short phones (a 640-tall screen) were 13px from showing the whole hand
+         without scrolling. Tighten the padding there only — the dealer's card
+         stays the largest thing on the felt. */
+      + '@media(max-height:700px){'
+      + '#focusContext.focus-context{padding:3px 11px;font-size:.74rem;margin-bottom:5px}'
+      + '.dealer-area .table-label{padding:1px 9px}'
+      + '#dealerCards .playing-card{width:62px;height:90px;flex-basis:62px}'
+      + '#dealerCards .playing-card .center{font-size:34px}'
+      + '.feedback{padding:5px 8px;font-size:.73rem}'
+      + '.play-box{padding:10px;gap:8px}'
+      + '.hand-card{padding:9px;gap:7px}'
+      + '.action-grid button{padding:9px}'
+      + '}'
       + '.seq-main{display:grid;gap:5px;min-width:0;flex:1}'
       + '.seq-made{display:flex;align-items:center;gap:7px;flex-wrap:wrap}'
       // one line per staked side bet: what it was, how it landed, what it paid
