@@ -336,6 +336,15 @@
    * it to displace. It is fixed, so it shifts nothing, and it clears the moment
    * a wager is touched or a round deals.
    */
+  /** How much more bankroll the current wagers need, 0 if none. */
+  function bankrollShortfall() {
+    if (typeof readWagers !== 'function' || typeof state === 'undefined') return 0;
+    var committed = readWagers().reduce(function (sum, b) {
+      return sum + (b.main || 0) + (b.pairs || 0) + (b.trilux || 0) + (b.super || 0);
+    }, 0);
+    return Math.max(0, committed - state.bankroll);
+  }
+
   function wagerAlert(msg) {
     var el = document.getElementById('bjfWagerAlert');
     if (!msg) { if (el) el.classList.remove('show'); return; }
@@ -346,9 +355,39 @@
       el.addEventListener('click', function () { el.classList.remove('show'); });
       document.body.appendChild(el);
     }
+
+    // If the problem is simply not enough bankroll, the fix belongs right here
+    // rather than down in Session controls. Offer the exact shortfall, rounded
+    // up to the nearest £500 so the number is one he would actually buy in for.
+    var short = /bankroll/i.test(msg) ? bankrollShortfall() : 0;
+    var topUp = short > 0 ? Math.ceil(short / 500) * 500 : 0;
+    var fmt = (typeof money === 'function') ? money
+            : function (n) { return '£' + Math.abs(n); };
+
     el.innerHTML = '<div class="wa-card"><span class="wa-mark">!</span>'
-      + '<span class="wa-text"></span></div>';
-    el.querySelector('.wa-text').textContent = msg;   // never inject the message as HTML
+      + '<div class="wa-body"><span class="wa-text"></span>'
+      + (topUp ? '<div class="wa-fix"><span class="wa-short"></span>'
+                 + '<button type="button" class="wa-add"></button></div>' : '')
+      + '</div></div>';
+    el.querySelector('.wa-text').textContent = msg;   // never inject as HTML
+
+    if (topUp) {
+      el.querySelector('.wa-short').textContent = 'Short by ' + fmt(short);
+      var btn = el.querySelector('.wa-add');
+      btn.textContent = 'Add ' + fmt(topUp);
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();                       // not the dismiss handler
+        var r = typeof window.BJF_ADD_CAPITAL === 'function'
+          ? window.BJF_ADD_CAPITAL(topUp) : null;
+        if (r && r.ok) {
+          el.classList.remove('show');
+          if (typeof window.updateUI === 'function') window.updateUI();
+        } else {
+          el.querySelector('.wa-short').textContent =
+            (r && r.why) || 'Could not add funds. Use Session controls below.';
+        }
+      });
+    }
     el.classList.add('show');
   }
 
@@ -808,7 +847,14 @@
       + 'border:1px solid #C98B8B;box-shadow:0 12px 34px rgba(0,0,0,.26);color:#7C2222}'
       + '.wa-mark{flex:0 0 21px;width:21px;height:21px;border-radius:50%;background:#9B2C2C;'
       + 'color:#fff;font-weight:900;font-size:.82rem;display:grid;place-items:center;line-height:1}'
+      + '.wa-body{display:grid;gap:8px;min-width:0}'
       + '.wa-text{font-size:.88rem;font-weight:600;line-height:1.35}'
+      + '.wa-fix{display:flex;align-items:center;gap:10px;flex-wrap:wrap}'
+      + '.wa-short{font-size:.78rem;font-weight:700;opacity:.85}'
+      + '.wa-add{font:inherit;font-size:.82rem;font-weight:800;min-height:40px;'
+      + 'padding:0 14px;border-radius:10px;border:1px solid #7C2222;'
+      + 'background:#9B2C2C;color:#fff;cursor:pointer;white-space:nowrap}'
+      + '.wa-add:hover{background:#7C2222}'
             /* index.html's phone media query sets flex-direction:column here, which
          is what stacked the title above the pill. Override the direction too,
          not just the alignment. */
