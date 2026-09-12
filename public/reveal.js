@@ -279,6 +279,51 @@
     host._t = setTimeout(function () { host.classList.remove('show'); }, TOAST_MS);
   }
 
+  /* ------------------------------------------------- SIDE-BET WIN ON THE BOX
+   * A banner at the top of the screen was not enough: it auto-hides after 3.6s
+   * and Ram missed it entirely. A win belongs ON the box that won it, where he
+   * is already looking, and it should stay there for the whole round.
+   *
+   * The box header is "Box 1" and then a whole empty row of white — the badge
+   * goes there, beside the label.
+   *
+   * LAYOUT SAFETY: this header sits ABOVE the action buttons. If it grows when
+   * a badge appears, every button moves and we are back to the mis-tap bug that
+   * cost Ram real money. So the header reserves the badge's height permanently
+   * (min-height, whether or not a badge is present) and the badge row never
+   * wraps. Adding or removing a badge cannot change the header's height.
+   */
+  function badgeSideBetWins() {
+    if (typeof state === 'undefined' || !state.boxes) return;
+    var boxes = document.querySelectorAll('#boxDisplay .play-box');
+    var fmt = (typeof money === 'function') ? money
+            : function (n) { return '£' + Math.abs(n); };
+
+    state.boxes.forEach(function (box, i) {
+      var elb = boxes[i];
+      if (!elb) return;
+      var h = elb.querySelector('h3');
+      if (!h) return;
+
+      var old = h.querySelector('.won-strip');
+      if (old) old.remove();
+
+      var wins = sideBetWins(box);
+      if (!wins.length) return;
+
+      var strip = document.createElement('span');
+      strip.className = 'won-strip';
+      strip.innerHTML = wins.map(function (w) {
+        return '<span class="won-chip' + (w.mult >= 30 ? ' big' : '') + '">'
+          + '<span class="won-bet">' + w.name.toUpperCase() + '</span>'
+          + '<span class="won-said">WON</span>'
+          + '<span class="won-amt">' + fmt(w.net) + '</span>'
+          + '</span>';
+      }).join('');
+      h.appendChild(strip);
+    });
+  }
+
   function renderSequenceNote() {
     var dock = belowTableDock();
     if (!dock || typeof state === 'undefined' || !state.boxes) return;
@@ -560,6 +605,7 @@
         var r = originalRender.apply(this, arguments);
         if (pausing) { disableActions(); flagLastCard(); }
         badgeNaturals();
+        try { badgeSideBetWins(); } catch (e) { /* cosmetic */ }
         return r;
       };
     }
@@ -586,8 +632,10 @@
     if (typeof originalDeal === 'function') {
       window.dealRound = function () {
         var r = originalDeal.apply(this, arguments);
-        try { announceNaturals(); badgeNaturals(); renderSequenceNote(); showWinToast(); }
-        catch (e) { /* cosmetic */ }
+        try {
+          announceNaturals(); badgeNaturals(); badgeSideBetWins();
+          renderSequenceNote(); showWinToast();
+        } catch (e) { /* cosmetic */ }
         return r;
       };
     }
@@ -680,6 +728,28 @@
       + '.compact-breakdown > div.paid{font-weight:800;color:var(--green,#0B5D3B)}'
       + '.compact-breakdown > div.paid span{color:var(--green,#0B5D3B);opacity:.85}'
       + '.compact-breakdown > div.unplayed{opacity:.38}'
+      /* The box header reserves the badge's height ALWAYS, present or not, so a
+         win appearing can never push the action buttons down. */
+      + '.play-box h3{display:flex;align-items:center;gap:9px;min-height:30px;'
+      + 'flex-wrap:nowrap;overflow:hidden}'
+      + '.won-strip{display:inline-flex;gap:6px;min-width:0;overflow:hidden;'
+      + 'flex-wrap:nowrap}'
+      + '.won-chip{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;'
+      + 'background:linear-gradient(180deg,#12885F,#0B5D3B);color:#fff;'
+      + 'border-radius:8px;padding:4px 9px;box-shadow:0 2px 6px rgba(11,93,59,.34);'
+      + 'font-size:.74rem;line-height:1}'
+      + '.won-chip.big{background:linear-gradient(180deg,#E0B63F,#B8901B);color:#2E2205;'
+      + 'box-shadow:0 2px 8px rgba(184,144,27,.4)}'
+      + '.won-bet{font-weight:800;letter-spacing:.04em}'
+      + '.won-said{font-weight:700;opacity:.75;font-size:.66rem;letter-spacing:.08em}'
+      + '.won-amt{font-weight:900;font-variant-numeric:tabular-nums;font-size:.86rem}'
+      /* "WON" is the whole point — it is what makes the chip read as a win
+         rather than a stake. Tighten everything else before dropping it. */
+      + '@media(max-width:420px){'
+      + '.won-chip{padding:4px 7px;gap:5px;font-size:.68rem}'
+      + '.won-amt{font-size:.8rem}'
+      + '.play-box h3{gap:7px;font-size:.9rem}'
+      + '}'
       + '.seq-main{display:grid;gap:5px;min-width:0;flex:1}'
       + '.seq-made{display:flex;align-items:center;gap:7px;flex-wrap:wrap}'
       // one line per staked side bet: what it was, how it landed, what it paid
