@@ -187,12 +187,12 @@
     aiSection.id = 'aiPanel';
     aiSection.innerHTML =
       '<div class="section-heading">' +
-        '<div><h2>AI session analysis</h2>' +
+        '<div><h2>Gemini session analysis</h2>' +
         '<p>Generated automatically by Gemini on Vertex AI and saved with the session.</p></div>' +
         '<button id="aiRefreshBtn" class="secondary small">Reload latest</button>' +
       '</div>' +
       '<div id="aiContent" class="muted" style="margin-top:12px">' +
-        'Press “Analyse with AI” above after playing some rounds.</div>';
+        'Press “Analyse with Gemini” above after playing some rounds.</div>';
 
     var histSection = document.createElement('section');
     histSection.className = 'panel';
@@ -300,7 +300,7 @@
     var share = el('shareReportBtn');
     if (share) {
       var fresh = share.cloneNode(true);
-      fresh.textContent = 'Analyse with AI';
+      fresh.textContent = 'Analyse with Gemini';
       share.parentNode.replaceChild(fresh, share);
       fresh.addEventListener('click', runAnalysis);
     }
@@ -482,7 +482,7 @@
           }
         };
         if (typeof window.BJF_NOTICE === 'function') {
-          window.BJF_NOTICE('AI analysis complete',
+          window.BJF_NOTICE('Gemini analysis complete',
             'Your session has been analysed and saved with it.', reveal);
         } else {
           reveal();
@@ -495,7 +495,7 @@
         setStatus('err', 'Analysis failed');
       })
       .then(function () {
-        if (btn) { btn.disabled = false; btn.textContent = 'Analyse with AI'; }
+        if (btn) { btn.disabled = false; btn.textContent = 'Analyse with Gemini'; }
       });
   }
 
@@ -509,7 +509,7 @@
     if (!box) return;
     if (!analysis) {
       box.className = 'muted';
-      box.textContent = 'Press “Analyse with AI” above after playing some rounds.';
+      box.textContent = 'Press “Analyse with Gemini” above after playing some rounds.';
       return;
     }
 
@@ -610,7 +610,7 @@
             '<div><strong>' + fmtDate(s.updated_at) + (isCurrent ? ' · current' : '') + '</strong>' +
               '<div class="sub">' + s.rounds + ' rounds · ' + acc + ' accuracy · ' +
                 s.mistakes_count + ' mistakes · ' + s.analyses +
-                (s.analyses === 1 ? ' AI analysis' : ' AI analyses') + '</div></div>' +
+                (s.analyses === 1 ? ' Gemini analysis' : ' Gemini analyses') + '</div></div>' +
             '<span class="pl ' + (pl >= 0 ? 'up' : 'down') + '">' + money(pl) + '</span>' +
             '<button class="secondary small" data-session="' + escapeHTML(s.id) + '">View</button>' +
           '</div>';
@@ -641,7 +641,7 @@
     api('/api/sessions/' + id).then(function (detail) {
       var complete = (detail.analyses || []).filter(function (a) { return a.status === 'complete'; });
       if (!complete.length) {
-        renderMessage('That session has no stored AI analysis yet.');
+        renderMessage('That session has no stored Gemini analysis yet.');
       } else {
         var a = complete[0];
         renderAnalysis({
@@ -840,7 +840,7 @@
    */
   function injectPublishControl() {
     if (el('publishDataBtn')) return;
-    // Sits directly above "Analyse with AI". Both hand the session over for
+    // Sits directly above "Analyse with Gemini". Both hand the session over for
     // review, so they belong together rather than one of them being down in
     // Session controls among the bankroll and reset machinery.
     var anchor = el('shareReportBtn');

@@ -570,7 +570,7 @@
                 'Breakdown, mistakes and raw report');
     }
 
-    [['aiPanel', 'AI analysis'],
+    [['aiPanel', 'Gemini analysis'],
      ['historyPanel', 'Past sessions'],
      ['roundHistoryPanel', 'Round history']].forEach(function (pair) {
       var el = document.getElementById(pair[0]);
@@ -585,7 +585,7 @@
     }
   }
 
-  /* A plain confirmation dialogue. The AI analysis takes several seconds and
+  /* A plain confirmation dialogue. The Gemini analysis takes several seconds and
    * its panel is collapsed by default, so without this a finished run left no
    * visible sign that anything had happened. Exposed for cloud.js to call.
    */
