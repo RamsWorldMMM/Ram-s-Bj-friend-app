@@ -383,6 +383,30 @@
     if (typeof state === 'undefined' || !state.boxes) return;
 
     var results = document.querySelectorAll('#settlements .compact-box-result');
+
+    /* The Main / Pairs / Trilux / Super breakdown is authored inside a
+     * <details>, so it starts collapsed and a side-bet win is invisible until
+     * you tap the box open. That is the one number Ram is looking for, and he
+     * should not have to hunt for it. Open every box, and mark the side bets
+     * that actually paid so a win reads at a glance instead of sitting in a
+     * row of identical figures. */
+    state.boxes.forEach(function (box, i) {
+      var elb = results[i];
+      if (!elb) return;
+      elb.open = true;
+
+      var side = box.side || {};
+      var order = ['main', 'pairs', 'trilux', 'super'];
+      var cells = elb.querySelectorAll('.compact-breakdown > div');
+      Array.prototype.forEach.call(cells, function (cell, n) {
+        var key = order[n];
+        cell.classList.remove('paid', 'unplayed');
+        if (key === 'main' || !side[key]) return;
+        var r = side[key];
+        if (!r.stake) cell.classList.add('unplayed');      // never staked — recede it
+        else if (r.mult > 0) cell.classList.add('paid');   // it hit — lift it
+      });
+    });
     state.boxes.forEach(function (box, i) {
       var elb = results[i];
       if (!elb) return;
@@ -545,6 +569,13 @@
     if (typeof originalSettle === 'function') {
       window.renderSettlement = function () {
         var r = originalSettle.apply(this, arguments);
+        // The win banner has done its job by now, and the settlement screen
+        // states the same figures in full. Clear it so it cannot sit on top of
+        // the very breakdown the player came here to read.
+        try {
+          var t = document.getElementById('bjfToast');
+          if (t) { clearTimeout(t._t); t.classList.remove('show'); }
+        } catch (e) { /* cosmetic */ }
         try { decorateSettlement(); } catch (e) { /* cosmetic */ }
         return r;
       };
@@ -645,6 +676,10 @@
       + '.toast-total{border-top:1px solid rgba(255,255,255,.24);padding-top:6px;'
       + 'font-weight:800;font-size:.82rem;text-align:right}'
       + '#bjfToast.loud .toast-total{border-top-color:rgba(0,0,0,.18)}'
+      // settlement breakdown: a bet that paid should not look like one that lost
+      + '.compact-breakdown > div.paid{font-weight:800;color:var(--green,#0B5D3B)}'
+      + '.compact-breakdown > div.paid span{color:var(--green,#0B5D3B);opacity:.85}'
+      + '.compact-breakdown > div.unplayed{opacity:.38}'
       + '.seq-main{display:grid;gap:5px;min-width:0;flex:1}'
       + '.seq-made{display:flex;align-items:center;gap:7px;flex-wrap:wrap}'
       // one line per staked side bet: what it was, how it landed, what it paid
