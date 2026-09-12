@@ -209,21 +209,9 @@
     return out;
   }
 
-  /* ------------------------------------------------------------- WIN TOAST
-   * Ram: "when I hit Trilux you are not showing it quickly there."
-   *
-   * The note below the table is the record; this is the moment. It fires as the
-   * cards land, which is when the side bets are actually decided.
-   *
-   * HARD CONSTRAINT, learned the expensive way: this must never move the action
-   * buttons. Anything in normal flow above them shoves them mid-decision and a
-   * tap meant for Hit lands on Double. So the toast is position:fixed — it is
-   * outside layout entirely and cannot displace a single pixel — and it is
-   * pointer-events:none, so it can never swallow a tap meant for a button
-   * underneath it either. It auto-dismisses; there is nothing to press.
-   */
-  var TOAST_MS = 3600;
-
+  /* Which side bets this box actually staked AND won. Used by the badge that
+   * marks the winning box. A top-of-screen banner used to use this too; it was
+   * removed — an alert over the table is exactly where Ram does not want it. */
   function sideBetWins(box) {
     var side = box.side || {}, out = [];
     SIDE_BETS.forEach(function (bet) {
@@ -235,93 +223,70 @@
     return out;
   }
 
-  function showWinToast() {
+  /* --------------------------------------------------- SIDE-BET WIN BADGE
+   * A win shows in the white space beside the box name, and clears after three
+   * seconds. Nothing announces itself over the table any more.
+   *
+   * Wins are gathered from EVERY box, not just the one on screen. On a phone
+   * only the active box is displayed, so a win on Box 1 while Box 2 is being
+   * played would otherwise be invisible — which is exactly what happened to
+   * Ram. Each chip carries its box number when more than one box is in play.
+   *
+   * LAYOUT SAFETY: the header sits directly above the action buttons, so it
+   * reserves the chip's height permanently. The badge appearing AND vanishing
+   * three seconds later both leave Hit, Stand, Double and Split untouched.
+   */
+  var BADGE_MS = 3000;
+  var badgeRound = null;
+  var badgeExpired = false;
+
+  function clearWinStrips() {
+    Array.prototype.forEach.call(
+      document.querySelectorAll('#boxDisplay .won-strip'),
+      function (el) { el.remove(); });
+  }
+
+  function badgeSideBetWins() {
     if (typeof state === 'undefined' || !state.boxes) return;
+
+    // renderTable runs many times a round, so the three-second dismissal has to
+    // be remembered per round or the next render puts the badge straight back.
+    if (badgeRound !== state.rounds) {
+      badgeRound = state.rounds;
+      badgeExpired = false;
+      clearTimeout(badgeSideBetWins._t);
+      badgeSideBetWins._t = setTimeout(function () {
+        badgeExpired = true;
+        clearWinStrips();
+      }, BADGE_MS);
+    }
+    clearWinStrips();
+    if (badgeExpired) return;
+
     var wins = [];
     state.boxes.forEach(function (box) { wins = wins.concat(sideBetWins(box)); });
     if (!wins.length) return;
 
-    var host = document.getElementById('bjfToast');
-    if (!host) {
-      host = document.createElement('div');
-      host.id = 'bjfToast';
-      document.body.appendChild(host);
-    }
-    var total = wins.reduce(function (a, w) { return a + w.net; }, 0);
-    var best  = wins.reduce(function (a, w) { return w.mult > a.mult ? w : a; }, wins[0]);
-    // A 90:1 Super deserves more noise than a 5:1 mixed pair.
-    var loud  = best.mult >= 30;
-    var fmt   = (typeof money === 'function') ? money
-              : function (n) { return '£' + Math.abs(n); };
+    // Whichever box the player is actually looking at.
+    var host = document.querySelector('#boxDisplay .active-mobile-box h3')
+            || document.querySelector('#boxDisplay .play-box h3');
+    if (!host) return;
 
-    // ONE headline only. The toast floats over the table, and the dealer's
-    // up-card sits just below it — a line per win would grow tall enough to
-    // cover the one card the next decision depends on. Every win is listed in
-    // full in the note under the table; this is the glance, not the ledger.
-    host.className = loud ? 'loud' : '';
-    host.innerHTML =
-      '<div class="toast-card">'
-      + '<div class="toast-head">' + (loud ? 'BIG HIT' : 'SIDE BET HIT')
-        + (wins.length > 1
-            ? '<span class="toast-extra">+' + fmt(total) + ' across ' + wins.length + '</span>'
-            : (state.boxes.length > 1
-                ? '<span class="toast-extra">Box ' + best.box + '</span>' : ''))
-      + '</div>'
-      + '<div class="toast-line">'
-        + '<span class="toast-bet">' + best.name.toUpperCase() + '</span>'
-        + '<span class="toast-what">' + best.result + '</span>'
-        + '<span class="toast-net">+' + fmt(best.net) + '</span>'
-      + '</div>'
-      + '</div>';
-
-    host.classList.add('show');
-    clearTimeout(host._t);
-    host._t = setTimeout(function () { host.classList.remove('show'); }, TOAST_MS);
-  }
-
-  /* ------------------------------------------------- SIDE-BET WIN ON THE BOX
-   * A banner at the top of the screen was not enough: it auto-hides after 3.6s
-   * and Ram missed it entirely. A win belongs ON the box that won it, where he
-   * is already looking, and it should stay there for the whole round.
-   *
-   * The box header is "Box 1" and then a whole empty row of white — the badge
-   * goes there, beside the label.
-   *
-   * LAYOUT SAFETY: this header sits ABOVE the action buttons. If it grows when
-   * a badge appears, every button moves and we are back to the mis-tap bug that
-   * cost Ram real money. So the header reserves the badge's height permanently
-   * (min-height, whether or not a badge is present) and the badge row never
-   * wraps. Adding or removing a badge cannot change the header's height.
-   */
-  function badgeSideBetWins() {
-    if (typeof state === 'undefined' || !state.boxes) return;
-    var boxes = document.querySelectorAll('#boxDisplay .play-box');
+    var many = state.boxes.length > 1;
     var fmt = (typeof money === 'function') ? money
             : function (n) { return '£' + Math.abs(n); };
 
-    state.boxes.forEach(function (box, i) {
-      var elb = boxes[i];
-      if (!elb) return;
-      var h = elb.querySelector('h3');
-      if (!h) return;
-
-      var old = h.querySelector('.won-strip');
-      if (old) old.remove();
-
-      var wins = sideBetWins(box);
-      if (!wins.length) return;
-
-      var strip = document.createElement('span');
-      strip.className = 'won-strip';
-      strip.innerHTML = wins.map(function (w) {
-        return '<span class="won-chip' + (w.mult >= 30 ? ' big' : '') + '">'
-          + '<span class="won-bet">' + w.name.toUpperCase() + '</span>'
-          + '<span class="won-said">WON</span>'
-          + '<span class="won-amt">' + fmt(w.net) + '</span>'
-          + '</span>';
-      }).join('');
-      h.appendChild(strip);
-    });
+    var strip = document.createElement('span');
+    strip.className = 'won-strip';
+    strip.innerHTML = wins.map(function (w) {
+      return '<span class="won-chip' + (w.mult >= 30 ? ' big' : '') + '">'
+        + (many ? '<span class="won-box">B' + w.box + '</span>' : '')
+        + '<span class="won-bet">' + w.name.toUpperCase() + '</span>'
+        + '<span class="won-said">WON</span>'
+        + '<span class="won-amt">' + fmt(w.net) + '</span>'
+        + '</span>';
+    }).join('');
+    host.appendChild(strip);
   }
 
   function renderSequenceNote() {
@@ -624,13 +589,6 @@
     if (typeof originalSettle === 'function') {
       window.renderSettlement = function () {
         var r = originalSettle.apply(this, arguments);
-        // The win banner has done its job by now, and the settlement screen
-        // states the same figures in full. Clear it so it cannot sit on top of
-        // the very breakdown the player came here to read.
-        try {
-          var t = document.getElementById('bjfToast');
-          if (t) { clearTimeout(t._t); t.classList.remove('show'); }
-        } catch (e) { /* cosmetic */ }
         try { decorateSettlement(); } catch (e) { /* cosmetic */ }
         return r;
       };
@@ -643,7 +601,7 @@
         var r = originalDeal.apply(this, arguments);
         try {
           announceNaturals(); badgeNaturals(); badgeSideBetWins();
-          renderSequenceNote(); showWinToast();
+          renderSequenceNote();
         } catch (e) { /* cosmetic */ }
         return r;
       };
@@ -707,32 +665,6 @@
       + '.seq-cards .playing-card .corner.top{top:1px;left:2px}'
       + '.seq-cards .playing-card .corner.bottom{right:2px;bottom:1px}'
       + '.seq-cards .playing-card .center{font-size:11px}'
-      // WIN TOAST — fixed, so it is outside layout and cannot move a button;
-      // pointer-events:none, so it cannot swallow a tap meant for one either.
-      + '#bjfToast{position:fixed;left:50%;top:76px;transform:translate(-50%,-14px);'
-      + 'z-index:60;pointer-events:none;opacity:0;width:min(92vw,420px);'
-      + 'transition:opacity .18s ease,transform .18s ease}'
-      + '#bjfToast.show{opacity:1;transform:translate(-50%,0)}'
-      + '#bjfToast .toast-card{max-height:84px;overflow:hidden}'
-      + '@media(prefers-reduced-motion:reduce){#bjfToast{transition:none}}'
-      + '.toast-card{border-radius:14px;padding:9px 13px;'
-      + 'background:linear-gradient(180deg,#12805A,#0B5D3B);'
-      + 'box-shadow:0 14px 40px rgba(0,0,0,.34);border:1px solid rgba(255,255,255,.22);'
-      + 'color:#fff;display:grid;gap:4px}'
-      + '#bjfToast.loud .toast-card{background:linear-gradient(180deg,#F6E7B4,#D9B23A);'
-      + 'border-color:#B8901B;color:#4A3805}'
-      + '.toast-head{font-size:.63rem;font-weight:900;letter-spacing:.13em;opacity:.85;display:flex;justify-content:space-between;gap:10px}'
-      + '.toast-extra{font-weight:700;letter-spacing:.04em;opacity:.92}'
-      + '.toast-line{display:grid;grid-template-columns:auto 1fr auto;gap:9px;'
-      + 'align-items:baseline}'
-      + '.toast-bet{font-weight:900;font-size:.9rem;letter-spacing:.02em}'
-      + '.toast-what{font-size:.76rem;opacity:.85;min-width:0;overflow:hidden;'
-      + 'text-overflow:ellipsis;white-space:nowrap}'
-      + '.toast-net{font-weight:900;font-size:1rem;font-variant-numeric:tabular-nums}'
-      + '.toast-box{grid-column:1/-1;font-size:.64rem;opacity:.72;letter-spacing:.05em}'
-      + '.toast-total{border-top:1px solid rgba(255,255,255,.24);padding-top:6px;'
-      + 'font-weight:800;font-size:.82rem;text-align:right}'
-      + '#bjfToast.loud .toast-total{border-top-color:rgba(0,0,0,.18)}'
       // settlement breakdown: a bet that paid should not look like one that lost
       + '.compact-breakdown > div.paid{font-weight:800;color:var(--green,#0B5D3B)}'
       + '.compact-breakdown > div.paid span{color:var(--green,#0B5D3B);opacity:.85}'
@@ -750,6 +682,7 @@
       + 'font-size:.74rem;line-height:1}'
       + '.won-chip.big{background:linear-gradient(180deg,#E0B63F,#B8901B);color:#2E2205;'
       + 'box-shadow:0 2px 8px rgba(184,144,27,.4)}'
+      + '.won-box{font-weight:800;opacity:.7;font-size:.64rem;letter-spacing:.04em}'
       + '.won-bet{font-weight:800;letter-spacing:.04em}'
       + '.won-said{font-weight:700;opacity:.75;font-size:.66rem;letter-spacing:.08em}'
       + '.won-amt{font-weight:900;font-variant-numeric:tabular-nums;font-size:.86rem}'
