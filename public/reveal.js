@@ -297,30 +297,35 @@
         + '</span>';
     }).join('');
 
-    // Space is tight beside the box name. One chip can spell itself out; two or
-    // more have to give up the words to fit, and past two we count the rest
-    // rather than clip an amount in half.
-    var total = naturals.length + wins.length;
-    // One headline plus a count. Two full chips needed 292px and only had 247
-    // on a 360px phone, so an amount got cut in half. Every win is itemised in
-    // the note under the table; this is the glance, not the ledger.
-    var MAX = 1;
-    var shownWins = wins.slice(0, Math.max(0, MAX - naturals.length));
-    var hidden = total - naturals.length - shownWins.length;
+    // Space is tight beside the box name, so more than one win cannot be spelled
+    // out. An earlier version showed the first winner and hid the rest behind
+    // "+2" — which picked a winner arbitrarily and buried £750 of a £1,250
+    // round. Show the combined total instead: it is the number he wants, and it
+    // is honest about the whole round. The note under the table itemises it.
+    var fmt2 = (typeof money === 'function') ? money
+             : function (n) { return '£' + Math.abs(n); };
+    var winTotal = wins.reduce(function (a, w) { return a + w.net; }, 0);
+    var chips;
+
+    if (wins.length === 1) {
+      var w = wins[0];
+      chips = '<span class="won-chip' + (w.mult >= 30 ? ' big' : '') + '">'
+        + (many ? '<span class="won-box">B' + w.box + '</span>' : '')
+        + '<span class="won-bet">' + w.name.toUpperCase() + '</span>'
+        + '<span class="won-said">WON</span>'
+        + '<span class="won-amt">+' + fmt2(w.net) + '</span></span>';
+    } else if (wins.length > 1) {
+      chips = '<span class="won-chip big">'
+        + '<span class="won-bet">' + wins.length + ' SIDE BETS</span>'
+        + '<span class="won-said">WON</span>'
+        + '<span class="won-amt">+' + fmt2(winTotal) + '</span></span>';
+    } else {
+      chips = '';
+    }
 
     var strip = document.createElement('span');
-    strip.className = 'won-strip' + (total > 1 ? ' tight' : '');
-    strip.innerHTML = bjHtml + shownWins.map(function (w) {
-      return '<span class="won-chip' + (w.mult >= 30 ? ' big' : '') + '">'
-        + (many ? '<span class="won-box">B' + w.box + '</span>' : '')
-        + '<span class="won-bet">'
-          + (total > 1 ? w.name.replace(/^Trilux /, '').toUpperCase() : w.name.toUpperCase())
-          + '</span>'
-        + '<span class="won-said">WON</span>'
-        + '<span class="won-amt">' + fmt(w.net) + '</span>'
-        + '</span>';
-    }).join('')
-      + (hidden > 0 ? '<span class="won-chip more">+' + hidden + '</span>' : '');
+    strip.className = 'won-strip' + ((naturals.length && wins.length) ? ' tight' : '');
+    strip.innerHTML = bjHtml + chips;
     host.appendChild(strip);
   }
 
