@@ -339,6 +339,43 @@
     });
   }
 
+  /* ------------------------------------------------------ BETTING HEADER
+   * 266px — 31% of a 390x860 phone — went by before the first wager card:
+   *
+   *   94px  "Round setup", a subtitle, and the shoe pill, stacked
+   *   72px  an "Active boxes" label above a full-width select
+   *   46px  "Clear bets" alone on its own row
+   *
+   * The subtitle explains what the screen plainly shows. The label repeats the
+   * select's own text ("3 boxes"). And a lone button does not deserve a row.
+   *
+   * Collapse to two rows: title with the shoe pill beside it, then the box
+   * count and Clear bets sharing one line. Moving the nodes rather than
+   * restyling siblings keeps the game's own click handlers attached.
+   */
+  function compactBettingHeader() {
+    var panel = document.getElementById('bettingPanel');
+    if (!panel || document.getElementById('bjfSetupRow')) return;
+
+    var field = panel.querySelector('.compact-field');
+    var acts  = panel.querySelector('.bet-actions');
+    if (!field || !acts) return;
+
+    var row = document.createElement('div');
+    row.id = 'bjfSetupRow';
+    field.parentNode.insertBefore(row, field);
+    row.appendChild(field);
+    row.appendChild(acts);
+
+    // The select already reads "3 boxes", so the visible label is noise — but
+    // it still has to be announced, so it becomes the accessible name.
+    var sel = document.getElementById('boxCount');
+    var lab = field.querySelector('span');
+    if (sel && lab && !sel.getAttribute('aria-label')) {
+      sel.setAttribute('aria-label', lab.textContent.trim());
+    }
+  }
+
   function renderSequenceNote() {
     var dock = belowTableDock();
     if (!dock || typeof state === 'undefined' || !state.boxes) return;
@@ -644,6 +681,7 @@
       };
     }
     watchWagers();
+    try { compactBettingHeader(); } catch (e) { /* cosmetic */ }
 
     // Settlement decoration (items 5 and 7).
     var originalSettle = window.renderSettlement;
@@ -771,6 +809,23 @@
       + '.wa-mark{flex:0 0 21px;width:21px;height:21px;border-radius:50%;background:#9B2C2C;'
       + 'color:#fff;font-weight:900;font-size:.82rem;display:grid;place-items:center;line-height:1}'
       + '.wa-text{font-size:.88rem;font-weight:600;line-height:1.35}'
+            /* index.html's phone media query sets flex-direction:column here, which
+         is what stacked the title above the pill. Override the direction too,
+         not just the alignment. */
+      + '#bettingPanel .section-heading{flex-direction:row;align-items:center;'
+      + 'gap:10px;flex-wrap:nowrap;justify-content:space-between}'
+      + '#bettingPanel .section-heading > div{flex:0 1 auto;min-width:0}'
+      + '#bettingPanel .section-heading h2{white-space:nowrap}'
+      + '#bettingPanel .shoe-pill{flex:0 1 auto;min-width:0;overflow:hidden;'
+      + 'text-overflow:ellipsis;padding:6px 10px;font-size:.76rem}'
+      + '#bettingPanel .section-heading p{display:none}'
+      + '#bettingPanel .section-heading h2{font-size:1rem}'
+      + '#bjfSetupRow{display:flex;align-items:center;gap:9px}'
+      + '#bjfSetupRow .compact-field{flex:1 1 auto;min-width:0;max-width:none}'
+      + '#bjfSetupRow .compact-field span{display:none}'
+      + '#bjfSetupRow .compact-field select{min-height:44px}'
+      + '#bjfSetupRow .bet-actions{flex:0 0 auto;margin:0}'
+      + '#bjfSetupRow .bet-actions button{min-height:44px;white-space:nowrap}'
       + '.seq-main{display:grid;gap:5px;min-width:0;flex:1}'
       + '.seq-made{display:flex;align-items:center;gap:7px;flex-wrap:wrap}'
       // one line per staked side bet: what it was, how it landed, what it paid
