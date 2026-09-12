@@ -829,6 +829,59 @@
       : (n < 0 ? '-' : '') + '£' + Math.abs(Number(n) || 0).toLocaleString('en-GB');
   }
 
+  /* ------------------------------------------------ PUBLISH FOR CHATGPT
+   * Ram's ChatGPT can read the GitHub repository but cannot reach this app's
+   * data, which sits behind a login. This pushes a compact summary of his play
+   * to that repository so the chat he already uses can analyse it.
+   *
+   * Deliberately a button rather than an automatic sync: the app syncs after
+   * every settled round, and committing that often would bury the repository
+   * history in hundreds of near-identical commits.
+   */
+  function injectPublishControl() {
+    if (el('publishDataBtn')) return;
+    var reset = el('resetBtn');
+    var grid = reset && reset.closest ? reset.closest('.controls-grid') : null;
+    if (!grid) return;
+
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'publishDataBtn';
+    btn.className = 'secondary';
+    btn.textContent = 'Publish data for ChatGPT';
+    grid.appendChild(btn);
+
+    var note = document.createElement('p');
+    note.className = 'fine-print';
+    note.id = 'publishNote';
+    note.textContent = 'Sends a summary of your play to the GitHub repository so '
+      + 'ChatGPT can read it. Press it after a session.';
+    grid.parentNode.insertBefore(note, grid.nextSibling);
+
+    btn.addEventListener('click', function () {
+      if (!currentUser) { requireLogin(); return; }
+      btn.disabled = true;
+      btn.textContent = 'Publishing…';
+      note.textContent = 'Sending your session data…';
+      api('/api/publish', { method: 'POST' })
+        .then(function (r) {
+          var when = new Date(r.publishedAt);
+          note.textContent = 'Published ' + r.rounds + ' rounds from '
+            + r.sessions + ' session(s) at ' + when.toLocaleTimeString()
+            + '. ChatGPT will see this next time it reads the repository.';
+        })
+        .catch(function (err) {
+          note.textContent = 'Could not publish: '
+            + (err && err.message ? err.message : 'unknown error')
+            + '. Your play is still saved here.';
+        })
+        .then(function () {
+          btn.disabled = false;
+          btn.textContent = 'Publish data for ChatGPT';
+        });
+    });
+  }
+
   function wireAuthUI() {
     el('cloudLoginForm').addEventListener('submit', function (e) {
       e.preventDefault();
@@ -896,6 +949,7 @@
     injectUI();
     stampBuild();
     injectCapitalControl();
+    injectPublishControl();
     wireAuthUI();
     installHooks();
 

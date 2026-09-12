@@ -10,6 +10,8 @@ import * as repo from './repo.js';
 import { analyseSession } from './vertex.js';
 import { rowsForSession, toCSV, caveatsFor, COLUMNS } from './export.js';
 import { ensureSchema, schemaReport } from './migrate.js';
+import { buildDigests } from './digest.js';
+import { publishDigests } from './publish.js';
 
 const json = (data, init = {}) => new Response(JSON.stringify(data), {
   ...init,
@@ -181,6 +183,29 @@ async function route(request, env, ctx, url) {
       caveats,
       data: rows,
     });
+  }
+
+  // Compact, model-readable summaries of stored play. These are what get
+  // published to the repository for ChatGPT to read: the full CSV is too large
+  // for it to consume, these are not.
+  if (path === '/api/digests' && method === 'GET') {
+    const sessions = await repo.exportSessions(env.DB, user.id, null);
+    const digests = buildDigests(sessions, {
+      generatedAt: new Date().toISOString(),
+      appVersion: '1.4.7',
+    });
+    return json(digests);
+  }
+
+  // Pushes the digests to the repository Ram's ChatGPT already reads.
+  if (path === '/api/publish' && method === 'POST') {
+    try {
+      const result = await publishDigests(env, user.id, { appVersion: '1.4.7' });
+      return json(result);
+    } catch (err) {
+      console.error('Publish failed:', err?.stack || err);
+      return json({ ok: false, error: err?.message || 'Publish failed' }, { status: 502 });
+    }
   }
 
   if (path === '/api/sessions' && method === 'GET') {

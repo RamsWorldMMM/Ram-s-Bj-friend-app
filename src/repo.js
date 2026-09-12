@@ -139,8 +139,13 @@ export function listSessions(db, userId, limit = 50) {
  * round logs are not loaded twice.
  */
 export async function exportSessions(db, userId, sessionId) {
+  // The per-session aggregates are here for src/digest.js, which summarises the
+  // same rows. The CSV export ignores them; they are cheap scalars either way.
   const cols = `id, started_at, updated_at, app_version, strategy_version,
-                rules_profile, mode, rounds, round_log_json, round_log_meta`;
+                rules_profile, mode, rounds, round_log_json, round_log_meta,
+                decisions, correct, mistakes_count,
+                start_bankroll, bankroll, main_pl, pairs_pl, trilux_pl, super_pl,
+                max_drawdown, total_main_staked, total_side_staked`;
   const q = sessionId
     ? db.prepare(`SELECT ${cols} FROM sessions WHERE user_id = ? AND id = ?`).bind(userId, sessionId)
     : db.prepare(`SELECT ${cols} FROM sessions WHERE user_id = ? ORDER BY started_at`).bind(userId);
