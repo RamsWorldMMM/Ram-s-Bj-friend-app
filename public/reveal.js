@@ -453,6 +453,48 @@
     el.classList.add('show');
   }
 
+  /* The shoe runs out and dealRound() returns immediately — no round, no
+   * message, nothing. The app's own "SHOE COMPLETE" banner explains it, but I
+   * moved that into the dock below the table when clearing everything off the
+   * top of the screen, so it now sits far down the page where it is missed.
+   * The result is a Deal button that appears broken.
+   *
+   * Same treatment as the bankroll warning: blocking, because it genuinely is,
+   * and carrying the one action that resolves it.
+   */
+  function shoeAlert() {
+    var el = document.getElementById('bjfShoeAlert');
+    var banner = document.getElementById('shoeBanner');
+    var ended = (typeof state !== 'undefined' && state.shoeEnded)
+      || (banner && !banner.classList.contains('hidden'));
+    if (!ended) {
+      if (el) el.classList.remove('show');
+      return;
+    }
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'bjfShoeAlert';
+      el.setAttribute('role', 'alert');
+      document.body.appendChild(el);
+    }
+    el.innerHTML = '<div class="sa-card">'
+      + '<div class="sa-mark" aria-hidden="true">&#9824;</div>'
+      + '<strong class="sa-title">Shoe finished</strong>'
+      + '<p class="sa-body">The cut card has been reached, so no more rounds can '
+        + 'be dealt from this shoe. Shuffle a new one to carry on.</p>'
+      + '<button type="button" class="sa-go">Shuffle new shoe</button>'
+      + '</div>';
+
+    el.querySelector('.sa-go').addEventListener('click', function () {
+      // Click the app's own control so its binding does the work, rather than
+      // calling makeShoe here and drifting from what the button does.
+      var own = document.getElementById('shoeBannerShuffle') || document.getElementById('shuffleBtn');
+      if (own) own.click();
+      el.classList.remove('show');
+    });
+    el.classList.add('show');
+  }
+
   function mirrorWagerWarning() {
     var w = document.getElementById('warning');
     if (!w) return;
@@ -911,6 +953,24 @@
       };
     }
     watchWagers();
+
+    /* Getting this hook right took three attempts, so the reasoning is worth
+     * keeping. markShoeEnded() DISABLES the deal button, so a click on it is
+     * inert and the dealRound wrapper never runs. It does not call updateUI
+     * either, so wrapping that fired nothing.
+     *
+     * What it DOES do, reliably, is unhide #shoeBanner — and makeShoe() hides
+     * it again. Watching that element's class covers both directions without
+     * depending on any function being called. */
+    var banner = document.getElementById('shoeBanner');
+    if (banner) {
+      var syncShoe = function () { try { shoeAlert(); } catch (e) { /* cosmetic */ } };
+      syncShoe();
+      try {
+        new MutationObserver(syncShoe).observe(banner,
+          { attributes: true, attributeFilter: ['class'] });
+      } catch (e) { /* the initial call still covers a restored session */ }
+    }
     try { compactBettingHeader(); } catch (e) { /* cosmetic */ }
     try { foldLongPanels(); } catch (e) { /* cosmetic */ }
     try { watchBottomDock(); } catch (e) { /* cosmetic */ }
@@ -1152,6 +1212,23 @@
       + '.bjf-fold > summary:focus-visible{outline:2px solid var(--green,#0B5D3B);'
       + 'outline-offset:2px;border-radius:6px}'
       + '@media(prefers-reduced-motion:reduce){.bjf-fold > summary::after{transition:none}}'
+      + '#bjfShoeAlert{position:fixed;inset:0;z-index:72;opacity:0;pointer-events:none;'
+      + 'background:rgba(28,20,4,.46);backdrop-filter:blur(2px);display:flex;'
+      + 'align-items:center;justify-content:center;padding:18px;transition:opacity .16s ease}'
+      + '#bjfShoeAlert.show{opacity:1;pointer-events:auto}'
+      + '.sa-card{width:min(92vw,360px);display:grid;gap:10px;justify-items:center;'
+      + 'text-align:center;border-radius:18px;padding:22px 20px;'
+      + 'background:linear-gradient(180deg,#FFFBEF,#F6E7B4);border:1px solid var(--gold,#D9B23A);'
+      + 'box-shadow:0 22px 60px rgba(0,0,0,.34);color:#5A4406;'
+      + 'transform:translateY(-8px);transition:transform .16s ease}'
+      + '#bjfShoeAlert.show .sa-card{transform:none}'
+      + '.sa-mark{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;'
+      + 'background:linear-gradient(180deg,#E0B63F,#B8901B);color:#fff;font-size:1.4rem}'
+      + '.sa-title{font-size:1.02rem}'
+      + '.sa-body{margin:0;font-size:.85rem;line-height:1.4;opacity:.9}'
+      + '.sa-go{font:inherit;font-weight:800;min-height:48px;width:100%;margin-top:4px;'
+      + 'border-radius:12px;border:1px solid #7A5E06;background:#7A5E06;color:#fff;cursor:pointer}'
+      + '@media(prefers-reduced-motion:reduce){#bjfShoeAlert,#bjfShoeAlert .sa-card{transition:none}}'
       + '#bjfNotice{position:fixed;inset:0;z-index:75;opacity:0;pointer-events:none;'
       + 'background:rgba(10,24,18,.44);backdrop-filter:blur(2px);display:flex;'
       + 'align-items:center;justify-content:center;padding:18px;transition:opacity .16s ease}'
