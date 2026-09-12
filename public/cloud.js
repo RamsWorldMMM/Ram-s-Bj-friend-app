@@ -471,6 +471,22 @@
         renderAnalysis(res.analysis);
         setStatus('ok', currentUser.username + ' · analysed');
         loadHistory();
+        // The panel is collapsed by default and this takes several seconds, so
+        // say plainly that it finished, then open it and scroll it into view.
+        var reveal = function () {
+          var d = typeof window.BJF_OPEN_FOLD === 'function'
+            ? window.BJF_OPEN_FOLD('aiPanel') : null;
+          var target = d || el('aiPanel');
+          if (target && target.scrollIntoView) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        };
+        if (typeof window.BJF_NOTICE === 'function') {
+          window.BJF_NOTICE('AI analysis complete',
+            'Your session has been analysed and saved with it.', reveal);
+        } else {
+          reveal();
+        }
       })
       .catch(function (err) {
         if (err.status === 401) { requireLogin(); return; }

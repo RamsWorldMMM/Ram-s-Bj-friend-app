@@ -565,6 +565,50 @@
     }
   }
 
+  /* A plain confirmation dialogue. The AI analysis takes several seconds and
+   * its panel is collapsed by default, so without this a finished run left no
+   * visible sign that anything had happened. Exposed for cloud.js to call.
+   */
+  function notice(title, body, onClose) {
+    var el = document.getElementById('bjfNotice');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'bjfNotice';
+      el.setAttribute('role', 'dialog');
+      el.setAttribute('aria-modal', 'true');
+      document.body.appendChild(el);
+    }
+    el.innerHTML = '<div class="nt-card">'
+      + '<div class="nt-tick" aria-hidden="true">&#10003;</div>'
+      + '<strong class="nt-title"></strong>'
+      + '<p class="nt-body"></p>'
+      + '<button type="button" class="nt-ok">View analysis</button>'
+      + '</div>';
+    el.querySelector('.nt-title').textContent = title;
+    el.querySelector('.nt-body').textContent = body;
+
+    var close = function () {
+      el.classList.remove('show');
+      if (typeof onClose === 'function') onClose();
+    };
+    el.querySelector('.nt-ok').addEventListener('click', close);
+    el.addEventListener('click', function (e) { if (e.target === el) close(); });
+    el.querySelector('.nt-card').addEventListener('click', function (e) {
+      e.stopPropagation();
+    });
+    el.classList.add('show');
+    try { el.querySelector('.nt-ok').focus(); } catch (e) { /* ignore */ }
+  }
+  window.BJF_NOTICE = notice;
+
+  /** Opens a folded section by the id of the panel holding it. */
+  function openFold(panelId) {
+    var d = document.querySelector('#' + panelId + ' .bjf-fold');
+    if (d) d.open = true;
+    return d;
+  }
+  window.BJF_OPEN_FOLD = openFold;
+
   function renderSequenceNote() {
     var dock = belowTableDock();
     if (!dock || typeof state === 'undefined' || !state.boxes) return;
@@ -1055,6 +1099,27 @@
       + '.bjf-fold > summary:focus-visible{outline:2px solid var(--green,#0B5D3B);'
       + 'outline-offset:2px;border-radius:6px}'
       + '@media(prefers-reduced-motion:reduce){.bjf-fold > summary::after{transition:none}}'
+      + '#bjfNotice{position:fixed;inset:0;z-index:75;opacity:0;pointer-events:none;'
+      + 'background:rgba(10,24,18,.44);backdrop-filter:blur(2px);display:flex;'
+      + 'align-items:center;justify-content:center;padding:18px;transition:opacity .16s ease}'
+      + '#bjfNotice.show{opacity:1;pointer-events:auto}'
+      + '.nt-card{width:min(92vw,360px);display:grid;gap:9px;justify-items:center;'
+      + 'text-align:center;border-radius:18px;padding:22px 20px;background:var(--panel,#fff);'
+      + 'border:1px solid var(--border,#E3E6EA);box-shadow:0 22px 60px rgba(0,0,0,.32);'
+      + 'transform:translateY(-8px);transition:transform .16s ease}'
+      + '#bjfNotice.show .nt-card{transform:none}'
+      + '.nt-tick{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;'
+      + 'background:linear-gradient(180deg,#12885F,#0B5D3B);color:#fff;font-size:1.4rem}'
+      + '.nt-title{font-size:1.02rem}'
+      + '.nt-body{margin:0;font-size:.85rem;color:var(--muted,#6B7280);line-height:1.4}'
+      + '.nt-ok{font:inherit;font-weight:800;min-height:46px;width:100%;margin-top:4px;'
+      + 'border-radius:12px;border:1px solid transparent;background:var(--green,#0B5D3B);'
+      + 'color:#fff;cursor:pointer}'
+      + '@media(prefers-reduced-motion:reduce){#bjfNotice,#bjfNotice .nt-card{transition:none}}'
+      /* The accuracy badge sat at flex:0 1 auto, so the long headline beside it
+         squeezed it to its 42px minimum while "41.4%" needed 45px. */
+      + '.ai-grade{flex:0 0 auto;white-space:nowrap;width:auto;padding:0 13px}'
+      + '.ai-head{align-items:center}'
       + '.seq-main{display:grid;gap:5px;min-width:0;flex:1}'
       + '.seq-made{display:flex;align-items:center;gap:7px;flex-wrap:wrap}'
       // one line per staked side bet: what it was, how it landed, what it paid
