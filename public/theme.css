@@ -557,7 +557,32 @@ input[data-field][readonly]:focus { box-shadow: none; border-color: var(--green)
   row-gap: 4px;
 }
 .compact-result-main { min-width: 0; }
-.mini-hand { align-items: flex-start; }
+
+/* §5b(ii) — MOBILE: give the cards the whole width.
+ * .mini-hand laid the card row and the result text side by side on one flex
+ * line. The text does not shrink (it is nowrap), so on a phone it took 153px of
+ * the 208px available and left 48px for the cards — exactly one card wide. A
+ * five-card hand then wrapped into five stacked rows, 256px tall, with most of
+ * the panel empty beside it.
+ *
+ * Stack them instead: cards on their own full-width row, result underneath.
+ * Five 34px cards plus gaps need 182px and now fit on one line. */
+.mini-hand {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: start;
+  gap: 5px;
+}
+.mini-hand .mini-cards { width: 100%; gap: 3px; }
+.mini-hand .mini-total { white-space: normal; }
+
+/* Past six cards a second row is unavoidable — keep it tidy rather than let a
+ * long hand push the settlement panel down the screen. */
+@media (max-width: 430px) {
+  .mini-card { width: 31px; height: 44px; flex: 0 0 31px; }
+  .mini-card .mini-rank { font-size: 10px; }
+  .mini-card .mini-suit { font-size: 17px; }
+}
 
 /* §7 — compact result layout: let the label stack under the cards rather than
    compete with them for width. */
