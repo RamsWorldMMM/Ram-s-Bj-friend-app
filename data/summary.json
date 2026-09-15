@@ -1,31 +1,56 @@
 {
  "what_this_is": "Every blackjack session recorded by Ram's BJ Friend, summarised one row per session. Money is pounds. accuracy_pct is correct decisions as a percentage of decisions graded against basic strategy.",
- "generated_at": "2026-09-12T00:00:00.000Z",
- "app_version": null,
- "rules": "6 decks / dealer stands soft 17 / European No Hole Card, full loss on splits and doubles / double on any two / double after split",
+ "generated_at": "2026-09-15T10:58:49.605Z",
+ "app_version": "1.4.7",
+ "rules": "6D / S17 / ENHC-full-loss / DOA / DAS",
  "read_this_first": [
   "A top-up of the bankroll is capital, not winnings: session_pl already excludes deposits, so it stays a true profit-and-loss figure.",
-  "0 of 0 session(s) have no per-round detail and appear in totals only.",
+  "0 of 1 session(s) have no per-round detail and appear in totals only.",
   "Side bets are decided the moment the cards are dealt, before any player decision, so they cannot be affected by how a hand was played."
  ],
  "lifetime": {
-  "sessions": 0,
-  "rounds": 0,
-  "decisions": 0,
-  "correct": 0,
-  "mistakes": 0,
-  "accuracy_pct": null,
-  "main_pl": 0,
+  "sessions": 1,
+  "rounds": 2,
+  "decisions": 5,
+  "correct": 2,
+  "mistakes": 3,
+  "accuracy_pct": 40,
+  "main_pl": -400,
   "pairs_pl": 0,
   "trilux_pl": 0,
   "super_pl": 0,
   "side_pl": 0,
-  "total_pl": 0,
-  "total_main_staked": 0,
+  "total_pl": -400,
+  "total_main_staked": 400,
   "total_side_staked": 0,
-  "main_roi_pct": null,
+  "main_roi_pct": -100,
   "side_roi_pct": null,
-  "worst_drawdown": 0
+  "worst_drawdown": 400
  },
- "sessions": []
+ "sessions": [
+  {
+   "session_id": "5e449f76-7885-449b-9a12-82a77ec44726",
+   "started_at": "2026-09-15 10:56:34",
+   "updated_at": "2026-09-15 10:56:43",
+   "app_version": "Ram's BJ Friend v1.4.7",
+   "rules_profile": "6D / S17 / ENHC-full-loss / DOA / DAS",
+   "rounds": 2,
+   "decisions": 5,
+   "correct": 2,
+   "mistakes": 3,
+   "accuracy_pct": 40,
+   "start_bankroll": 10000,
+   "end_bankroll": 9600,
+   "session_pl": -400,
+   "main_pl": -400,
+   "pairs_pl": 0,
+   "trilux_pl": 0,
+   "super_pl": 0,
+   "side_pl": 0,
+   "max_drawdown": 400,
+   "total_main_staked": 400,
+   "total_side_staked": 0,
+   "has_round_detail": true
+  }
+ ]
 }
