@@ -186,10 +186,19 @@
               net: res ? res.net : 0,
             };
           }),
+          /* stake and mult are what make the staking question answerable.
+             sideSettlement() returns {stake, name, mult, returned, net}; only
+             name and net were kept, and from net alone a stake is recoverable
+             for a losing bet (net = -stake) but not a winning one without
+             mapping the name back to its multiplier. Storing both ends that
+             guesswork, and costs two numbers per bet. */
           side: {
-            pairs: { name: box.side.pairs.name, net: box.side.pairs.net },
-            trilux: { name: box.side.trilux.name, net: box.side.trilux.net },
-            super: { name: box.side.super.name, net: box.side.super.net },
+            pairs: { name: box.side.pairs.name, net: box.side.pairs.net,
+                     stake: box.side.pairs.stake, mult: box.side.pairs.mult },
+            trilux: { name: box.side.trilux.name, net: box.side.trilux.net,
+                      stake: box.side.trilux.stake, mult: box.side.trilux.mult },
+            super: { name: box.side.super.name, net: box.side.super.net,
+                     stake: box.side.super.stake, mult: box.side.super.mult },
           },
           mainNet: box.mainNet,
           sideNet: box.sideNet,

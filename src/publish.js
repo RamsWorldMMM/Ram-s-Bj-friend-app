@@ -9,7 +9,7 @@
  * conflict, which is what keeps two publishes from silently clobbering.
  */
 
-import { buildDigests } from './digest.js';
+import { buildDigests, buildStakingDigest } from './digest.js';
 import * as repo from './repo.js';
 
 const API = 'https://api.github.com';
@@ -80,6 +80,9 @@ export async function publishDigests(env, userId, opts = {}) {
     ['data/summary.json', digests.summary],
     ['data/shoes.json', digests.shoes],
     ['data/mistakes.json', digests.mistakes],
+    // Answers the side-bet staking question directly, rather than shipping the
+    // round-level data and hoping the arithmetic is done correctly downstream.
+    ['data/staking.json', buildStakingDigest(sessions, { generatedAt })],
   ];
 
   const rounds = digests.summary.lifetime.rounds;
