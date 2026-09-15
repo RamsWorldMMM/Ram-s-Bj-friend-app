@@ -842,10 +842,12 @@
   /* Shown only for the account whose record these files are. Sign out and it
      goes again, so it is never sitting there under the wrong name. */
   function showPublishControl(allowed) {
-    ['publishDataBtn', 'publishNote'].forEach(function (id) {
-      var e = el(id);
-      if (e) e.classList.toggle('hidden', !allowed);
-    });
+    var b = el('publishDataBtn');
+    if (b) b.classList.toggle('hidden', !allowed);
+    // The status line is driven by what is happening, not by who is signed in;
+    // signing out only ever hides it.
+    var n = el('publishNote');
+    if (n && !allowed) { n.textContent = ''; n.classList.add('hidden'); }
   }
 
   function injectPublishControl() {
@@ -873,27 +875,38 @@
     var note = document.createElement('p');
     note.className = 'fine-print hidden';
     note.id = 'publishNote';
-    note.textContent = 'Sends your play to ChatGPT so it can review it. '
-      + 'Press this after a session.';
     host.insertBefore(note, anchor);
+
+    /* Status only. It used to carry standing instruction — "Sends your play to
+       ChatGPT so it can review it" — which sat under the button on every load
+       and pushed the figures down the screen for a sentence nobody needs twice.
+       The button says what it does; this now speaks only while something is
+       happening, and says nothing the rest of the time. */
+    function say(text) {
+      note.textContent = text || '';
+      note.classList.toggle('hidden', !text);
+    }
 
     btn.addEventListener('click', function () {
       if (!currentUser) { requireLogin(); return; }
       btn.disabled = true;
       btn.textContent = 'Sending…';
-      note.textContent = 'Sending your play to ChatGPT…';
+      say('Sending your play to ChatGPT…');
       api('/api/publish', { method: 'POST' })
         .then(function (r) {
           var when = new Date(r.publishedAt);
-          note.textContent = 'Sent at ' + when.toLocaleTimeString() + '. ChatGPT '
+          say('Sent at ' + when.toLocaleTimeString() + '. ChatGPT '
             + 'can now read ' + r.rounds + ' rounds from '
             + r.sessions + ' session' + (r.sessions === 1 ? '' : 's')
-            + ' — ask it to review your play.';
+            + ' — ask it to review your play.');
         })
         .catch(function (err) {
-          note.textContent = 'Could not send: '
-            + (err && err.message ? err.message : 'unknown error')
-            + '. Your play is still saved here — try again in a moment.';
+          // Server messages already end in a full stop; appending another gave
+          // "…that account's record.. Your play is still saved here".
+          var why = (err && err.message ? err.message : 'unknown error')
+            .replace(/\.\s*$/, '');
+          say('Could not send: ' + why
+            + '. Your play is still saved here — try again in a moment.');
         })
         .then(function () {
           btn.disabled = false;
