@@ -842,3 +842,129 @@ input[data-field][readonly]:focus { box-shadow: none; border-color: var(--green)
 @media (prefers-reduced-motion: reduce) {
   .app-header, .next-round-dock, #dealBtn.large, #boxDisplay { will-change: auto; }
 }
+
+/* ------------------------------------------------- session summary: stat rail */
+/* The four session figures used to run as one inline sentence separated by "·".
+   It wrapped: at 320 and 360px "Rounds" fell to a second line that OPENED WITH A
+   STRAY "·", because the separator is a span+span::before on the item, not
+   between them. At 390px it fitted by two pixels, so any longer value — £10,000,
+   -£10,585, 100.0% — tipped it over too. A reserved 36px two-line box in
+   reveal.js stopped the header resizing, at the cost of making that orphan row
+   permanent.
+
+   So: four declared columns for four children. Nothing wraps because there is no
+   second line to wrap onto, the height is constant by construction rather than by
+   reservation, and the label moves above its value where it costs no horizontal
+   room. The header gets SHORTER than the 74px it reserved before.
+
+   Scoped with three classes (.app-header .status-strip.session-summary) so it
+   outranks reveal.js's late-injected style regardless of source order. */
+
+.app-header .status-strip.session-summary {
+  /* One place to tune. Both sizes grow with the viewport, then stop, so the
+     ratio of cell width to content is near-identical at 320, 360, 390 and 430.
+     The floors are deliberately not as low as they could be: labels below about
+     9.5px stop being readable on a phone held at arm's length, and this strip is
+     the only place the bankroll is visible during play. */
+  --cell-gap: 26px;
+  --lbl: clamp(.60rem, 2.6vw, .64rem);   /*  9.6px floor → 10.24px capped */
+  --val: clamp(.76rem, 3.5vw, .88rem);   /* 12.2px floor → 14.08px capped */
+
+  order: 2;
+  flex: 1 1 100%;                  /* still claims its own row in the header */
+
+  display: grid;
+  grid-template-columns: repeat(4, minmax(5.75rem, max-content));
+  column-gap: var(--cell-gap);
+  row-gap: 0;
+  justify-content: start;          /* on desktop hug left, never stretch */
+  align-content: start;
+
+  margin-top: 3px;
+  min-height: 0;                   /* retires the two-line reservation */
+  font-size: var(--val);
+  line-height: 1;
+  color: var(--muted);
+}
+
+/* index.html:60 deliberately keeps this strip visible while a hand is in play
+   (it beats the phone rule that hides .session-summary). Preserve that, with the
+   new display value rather than the old flex. */
+body.playing-mode .app-header .status-strip.session-summary { display: grid; }
+
+/* One cell: label on a fixed first row, value on a fixed second row. Fixed row
+   floors are what make the header height independent of the text inside it. */
+.app-header .status-strip.session-summary > span {
+  position: relative;              /* containing block for the divider */
+  display: grid;
+  grid-template-rows:
+    minmax(calc(var(--lbl) * 1.1), auto)
+    minmax(calc(var(--val) * 1.25), auto);
+  gap: 2px 0;
+  align-content: start;
+  justify-items: start;
+  min-width: 0;
+}
+
+/* The generated "·" becomes a hairline in the gutter — taken out of flow, so it
+   can no longer lead a row, which was the ugliest part of the old wrap. */
+.app-header .status-strip.session-summary > span + span::before {
+  content: '';
+  position: absolute;
+  left: calc(var(--cell-gap) / -2);
+  top: 1px;
+  bottom: 2px;
+  width: 1px;
+  margin: 0;
+  background: var(--border);
+  opacity: 1;
+}
+
+.app-header .status-strip.session-summary > span > i {
+  grid-row: 1;
+  font-style: normal;
+  font-size: var(--lbl);
+  line-height: 1.1;
+  font-weight: 600;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+  align-self: start;
+}
+
+.app-header .status-strip.session-summary > span > strong {
+  grid-row: 2;
+  font-size: var(--val);
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: -.005em;
+  color: var(--text);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  align-self: start;
+}
+
+/* Phones: four equal tracks and a tight gutter. At 320px that is
+   (320 - 24 padding - 30 gutter) / 4 = 66.5px a cell, against a worst case of
+   about 52px for the "ACCURACY" label and 60px for an eight-character value. */
+@media (max-width: 560px) {
+  .app-header .status-strip.session-summary {
+    --cell-gap: 10px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    max-width: 29rem;              /* stops the rail stretching at 500-560px */
+    margin-top: 2px;
+  }
+}
+
+/* index.html's playing-mode rules were written to make the header SMALLER once a
+   hand starts (padding 9px/13px, h1 1.05rem) — smaller, that is, than the 14px
+   padding and 1.25rem title of the original design. The phone rules above are
+   tighter than both, so those rules now do the opposite: the sticky header grows
+   7px the moment play begins and shoves the table down. Match the idle values so
+   entering and leaving play moves nothing. */
+@media (max-width: 560px) {
+  body.playing-mode .app-header { padding: 7px 12px; }
+  body.playing-mode .app-header h1 { font-size: .92rem; letter-spacing: .07em; }
+}

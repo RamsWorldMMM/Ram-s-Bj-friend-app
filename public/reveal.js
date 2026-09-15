@@ -1268,10 +1268,9 @@
       + '.seq-label{font-weight:800;color:var(--text,#111)}'
       + '.seq-why{color:var(--muted,#6B7280);font-size:.72rem}'
       + '.seq-sep{color:var(--border-strong,#C9CED6)}'
-      // The header stat strip wraps to a second line once Accuracy stops being
-      // a dash, which grew the sticky header and moved every button by 18px.
-      // Reserve both lines so the text can change without moving anything.
-      + '.app-header .status-strip{min-height:36px;align-content:flex-start}'
+      // The stat strip is a four-column grid in theme.css now, so its height is
+      // constant by construction and the old two-line reservation here — which
+      // is what made the orphaned 'Rounds' row permanent — is no longer needed.
       + '@media(prefers-reduced-motion:reduce){'
       + '.playing-card.just-dealt-in{animation:none}}';
     var st = document.createElement('style');
