@@ -247,3 +247,231 @@ export function buildDigests(sessions, meta = {}) {
     },
   };
 }
+
+/* ---------------------------------------------------------------- staking ---
+ * Answers one question: did varying the side-bet stakes improve P/L or control
+ * drawdown, against the same cards played flat?
+ *
+ * The counterfactual needs no replay engine. A side bet is settled from the
+ * dealt cards alone — before any player decision, and without reference to what
+ * was staked — so net = stake x mult, and re-staking the same cards is
+ * arithmetic rather than simulation. That makes the comparison exact.
+ *
+ * The permutation test is the part that stops a false finding. Splitting ROI by
+ * "after raising" versus "after lowering" produces dramatic-looking gaps out of
+ * pure noise, because a 270-to-1 payout lets one card decide a column. Keeping
+ * every stake and every outcome but shuffling which met which says how often
+ * chance alone produces a gap this size.
+ */
+
+/* Must match sideSettlement() in index.html. Names are unique within a product;
+ * 'Straight flush' and 'Three of a kind' pay differently in Trilux and Super,
+ * which is why the table is keyed by product and never shared. */
+const SIDE_MULT = {
+  pairs: { 'No pair': 0, 'Perfect pair': 30, 'Colour pair': 10, 'Mixed pair': 5 },
+  trilux: { 'No qualifying hand': 0, 'Mini Royal': 100, 'Straight flush': 35,
+            'Three of a kind': 30, Straight: 10, Flush: 5 },
+  super: { 'No qualifying hand': 0, 'Suited trips': 270, 'Straight flush': 180,
+           'Three of a kind': 90 },
+};
+const SIDE_LABEL = { pairs: 'Pairs', trilux: 'Trilux', super: 'Trilux Super' };
+
+/** Every placed side bet, in play order, as {product, stake, mult, box}.
+ *  Rounds captured before stake was stored still resolve: a losing bet gives
+ *  stake = -net, and a winning one divides net by the multiplier its name names. */
+function sideBets(sessions) {
+  const out = [];
+  for (const s of sessions) {
+    let rounds = [];
+    try { rounds = s.round_log_json ? JSON.parse(s.round_log_json) : []; } catch { continue; }
+    if (!Array.isArray(rounds)) rounds = rounds.rounds || [];
+    rounds.slice().sort((a, b) => (a.round || 0) - (b.round || 0)).forEach((r) => {
+      (r.boxes || []).forEach((box) => {
+        const side = box.side || {};
+        Object.keys(SIDE_MULT).forEach((p) => {
+          const b = side[p];
+          if (!b || !b.name || b.name === 'Not played') return;
+          const mult = typeof b.mult === 'number' ? b.mult : SIDE_MULT[p][b.name];
+          if (mult === undefined) return;                 // unrecognised outcome
+          const net = Number(b.net) || 0;
+          const stake = typeof b.stake === 'number' && b.stake > 0
+            ? b.stake
+            : (mult === 0 ? -net : net / mult);
+          if (!(stake > 0)) return;
+          out.push({ p, stake, mult, box: box.number, shoe: r.shoeNumber, round: r.round });
+        });
+      });
+    });
+  }
+  return out;
+}
+
+/** Final P/L and worst peak-to-trough fall, staking each bet by `stakeOf`. */
+function runCurve(bets, stakeOf) {
+  let cum = 0, peak = 0, dd = 0, low = 0;
+  for (const b of bets) {
+    const x = stakeOf(b.stake);
+    cum += b.mult ? x * b.mult : -x;
+    if (cum > peak) peak = cum;
+    if (peak - cum > dd) dd = peak - cum;
+    if (cum < low) low = cum;
+  }
+  return { pl: round2(cum), max_drawdown: round2(dd), worst_point: round2(low) };
+}
+
+/** How often chance alone produces a gap this large. Mulberry32 keeps the
+ *  figure reproducible — a p-value that moves every publish invites the reader
+ *  to reroll until they like it. */
+function permutationP(bets, trials) {
+  const stakes = bets.map((b) => b.stake);
+  const mults = bets.map((b) => b.mult);
+  const actual = bets.reduce((a, b) => a + (b.mult ? b.stake * b.mult : -b.stake), 0);
+  let seed = 0x9e3779b9;
+  const rnd = () => {
+    seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const sims = new Float64Array(trials);
+  const shuffled = mults.slice();
+  for (let t = 0; t < trials; t += 1) {
+    for (let i = shuffled.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(rnd() * (i + 1));
+      const tmp = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = tmp;
+    }
+    let sum = 0;
+    for (let i = 0; i < stakes.length; i += 1) {
+      sum += shuffled[i] ? stakes[i] * shuffled[i] : -stakes[i];
+    }
+    sims[t] = sum;
+  }
+  let mean = 0;
+  for (let i = 0; i < trials; i += 1) mean += sims[i];
+  mean /= trials;
+  let extreme = 0;
+  for (let i = 0; i < trials; i += 1) {
+    if (Math.abs(sims[i] - mean) >= Math.abs(actual - mean)) extreme += 1;
+  }
+  return { p: Math.round((extreme / trials) * 1000) / 1000, null_mean: round2(mean), trials };
+}
+
+function stakingForProduct(bets, key) {
+  const mine = bets.filter((b) => b.p === key);
+  if (!mine.length) return null;
+  const staked = mine.reduce((a, b) => a + b.stake, 0);
+  const avg = staked / mine.length;
+  const actual = runCurve(mine, (s) => s);
+  const flat = runCurve(mine, () => avg);
+
+  // Stake movement is only meaningful against this player's previous bet on the
+  // same box; boxes are staked independently.
+  const byBox = new Map();
+  mine.forEach((b) => {
+    const k = String(b.box);
+    if (!byBox.has(k)) byBox.set(k, []);
+    byBox.get(k).push(b);
+  });
+  const dir = { raised: [], held: [], lowered: [] };
+  const moves = { up: [], down: [] };
+  byBox.forEach((list) => {
+    for (let i = 1; i < list.length; i += 1) {
+      const d = list[i].stake - list[i - 1].stake;
+      if (d > 0) { dir.raised.push(list[i]); moves.up.push(d); }
+      else if (d < 0) { dir.lowered.push(list[i]); moves.down.push(-d); }
+      else dir.held.push(list[i]);
+    }
+  });
+  const roiOf = (list) => {
+    if (!list.length) return null;
+    const st = list.reduce((a, b) => a + b.stake, 0);
+    const nt = list.reduce((a, b) => a + (b.mult ? b.stake * b.mult : -b.stake), 0);
+    return { bets: list.length, staked: round2(st), net: round2(nt), roi_pct: pct(nt, st) };
+  };
+  const mean = (a) => (a.length ? round2(a.reduce((x, y) => x + y, 0) / a.length) : 0);
+  const wins = mine.filter((b) => b.mult);
+  const winAmounts = wins.map((b) => b.stake * b.mult).sort((a, b) => b - a);
+  const grossWon = winAmounts.reduce((a, b) => a + b, 0);
+
+  return {
+    product: SIDE_LABEL[key],
+    bets_placed: mine.length,
+    total_staked: round2(staked),
+    total_returned: round2(grossWon + mine.filter((b) => b.mult).reduce((a, b) => a + b.stake, 0)),
+    net_pl: actual.pl,
+    roi_pct: pct(actual.pl, staked),
+    wager: { average: round2(avg), min: round2(Math.min(...mine.map((b) => b.stake))),
+             max: round2(Math.max(...mine.map((b) => b.stake))) },
+    peak_profit: round2(Math.max(0, ...(() => { let c = 0; return mine.map((b) => { c += b.mult ? b.stake * b.mult : -b.stake; return c; }); })())),
+    max_drawdown: actual.max_drawdown,
+    stake_changes: {
+      raised: moves.up.length, lowered: moves.down.length, held: dir.held.length,
+      average_rise: mean(moves.up), average_fall: mean(moves.down),
+    },
+    after_a_stake_change: {
+      raised: roiOf(dir.raised), held: roiOf(dir.held), lowered: roiOf(dir.lowered),
+    },
+    counterfactual: {
+      varying_stakes: actual,
+      flat_at_same_average: flat,
+      flat_5: runCurve(mine, () => 5),
+      flat_10: runCurve(mine, () => 10),
+      flat_25: runCurve(mine, () => 25),
+      varying_gained_pl: round2(actual.pl - flat.pl),
+      varying_added_drawdown: round2(actual.max_drawdown - flat.max_drawdown),
+    },
+    luck_test: permutationP(mine, 2000),
+    concentration: {
+      winning_bets: wins.length,
+      biggest_win_share_pct: grossWon > 0 ? pct(winAmounts[0] || 0, grossWon) : null,
+      top_5_share_pct: grossWon > 0 ? pct(winAmounts.slice(0, 5).reduce((a, b) => a + b, 0), grossWon) : null,
+    },
+  };
+}
+
+/** The staking file. Separate per product, so a win in one cannot mask a loss
+ *  in another — which is the whole reason the three are never pooled here. */
+export function buildStakingDigest(sessions, meta = {}) {
+  const bets = sideBets(sessions);
+  const products = Object.keys(SIDE_MULT).map((k) => stakingForProduct(bets, k)).filter(Boolean);
+  const staked = bets.reduce((a, b) => a + b.stake, 0);
+  const avg = bets.length ? staked / bets.length : 0;
+  const actual = runCurve(bets, (s) => s);
+  const flat = runCurve(bets, () => avg);
+
+  return {
+    what_this_is: 'Did varying the Pairs, Trilux and Trilux Super stakes improve '
+      + 'profit or reduce drawdown, compared with the same cards played at a flat '
+      + 'stake? Money is pounds. Each product is reported separately.',
+    generated_at: meta.generatedAt || null,
+    read_this_first: [
+      'A side bet is settled from the dealt cards alone, before any player '
+        + 'decision and without reference to the stake. So the counterfactual is '
+        + 'exact arithmetic on the same cards, not a simulation — nothing is '
+        + 'reshuffled and no outcome changes.',
+      'Compare varying against flat_at_same_average, NOT against flat_5 or '
+        + 'flat_10. Those are smaller bets, so they lose less for a reason that '
+        + 'has nothing to do with varying. Only the same-average comparison '
+        + 'isolates the effect of moving the stake around.',
+      'luck_test.p is how often chance alone produces a gap this large. Above '
+        + 'about 0.05 the result is indistinguishable from noise, and the ROI '
+        + 'split in after_a_stake_change should NOT be reported as a finding '
+        + 'however dramatic it looks.',
+      'Check concentration before trusting any product. Where a handful of wins '
+        + 'carry most of the return, a single 270-to-1 card decides the figures.',
+    ],
+    combined: {
+      bets_placed: bets.length,
+      total_staked: round2(staked),
+      average_stake: round2(avg),
+      varying_stakes: actual,
+      flat_at_same_average: flat,
+      flat_5: runCurve(bets, () => 5),
+      flat_10: runCurve(bets, () => 10),
+      flat_25: runCurve(bets, () => 25),
+      varying_gained_pl: round2(actual.pl - flat.pl),
+      varying_added_drawdown: round2(actual.max_drawdown - flat.max_drawdown),
+    },
+    products,
+  };
+}

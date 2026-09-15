@@ -8,6 +8,15 @@ open the one that answers the question rather than the biggest one available.
 | `summary.json` | session | Lifetime totals, accuracy and profit over time |
 | `shoes.json` | shoe | Anything shoe-by-shoe |
 | `mistakes.json` | situation | Which mistakes actually repeat |
+| `staking.json` | side-bet product | Whether varying the side-bet stakes helped |
+
+`staking.json` answers one question: did varying the Pairs, Trilux and Trilux
+Super stakes improve profit or reduce drawdown, against the same cards played
+flat? The comparison is exact rather than simulated — a side bet is settled from
+the dealt cards alone, before any decision and regardless of the stake, so the
+same cards can be re-staked arithmetically. Compare against
+`flat_at_same_average`, never against `flat_5` or `flat_10`: those lose less
+simply because they are smaller bets.
 
 **Read the `read_this_first` list inside each file before drawing conclusions.**
 It states the things that are easy to get wrong, notably:
