@@ -420,7 +420,9 @@ function stakingForProduct(bets, key) {
       varying_gained_pl: round2(actual.pl - flat.pl),
       varying_added_drawdown: round2(actual.max_drawdown - flat.max_drawdown),
     },
-    luck_test: permutationP(mine, 2000),
+    // Below this a permutation test says nothing useful, and a p-value printed
+    // beside three bets reads as authority it has not earned.
+    luck_test: mine.length >= 60 ? permutationP(mine, 2000) : { p: null, trials: 0 },
     concentration: {
       winning_bets: wins.length,
       biggest_win_share_pct: grossWon > 0 ? pct(winAmounts[0] || 0, grossWon) : null,

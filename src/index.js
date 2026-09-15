@@ -10,7 +10,7 @@ import * as repo from './repo.js';
 import { analyseSession } from './vertex.js';
 import { rowsForSession, toCSV, caveatsFor, COLUMNS } from './export.js';
 import { ensureSchema, schemaReport } from './migrate.js';
-import { buildDigests } from './digest.js';
+import { buildDigests, buildStakingDigest } from './digest.js';
 import { publishDigests } from './publish.js';
 
 const json = (data, init = {}) => new Response(JSON.stringify(data), {
@@ -206,6 +206,14 @@ async function route(request, env, ctx, url) {
       console.error('Publish failed:', err?.stack || err);
       return json({ ok: false, error: err?.message || 'Publish failed' }, { status: 502 });
     }
+  }
+
+  // The side-bet staking verdict across every session, not just the device in
+  // hand. The panel falls back to computing locally when this cannot be reached,
+  // so signing out narrows the answer rather than removing it.
+  if (path === '/api/staking' && method === 'GET') {
+    const sessions = await repo.exportSessions(env.DB, user.id, null);
+    return json(buildStakingDigest(sessions, { generatedAt: new Date().toISOString() }));
   }
 
   if (path === '/api/sessions' && method === 'GET') {

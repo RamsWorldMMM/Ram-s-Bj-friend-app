@@ -1,23 +1,30 @@
-/* Ram's BJ Friend — SIDE-BET STAKING PANEL
+/* Ram's BJ Friend — SIDE-BET STAKING CHECK
  *
- * Presentation and arithmetic on already-captured data. No rule, wager, card or
- * result is touched.
+ * Presentation and arithmetic over already-captured play. No rule, wager, card
+ * or result is touched.
  *
- * WHAT IT ANSWERS
- * "Is varying my side-bet stakes actually working?" The honest answer needs a
+ * THE QUESTION
+ * "Is varying my side-bet stakes actually working?" Answering it needs a
  * comparison, and the comparison is exact rather than simulated: a side bet is
  * settled from the dealt cards alone — before any player decision and without
  * reference to what was staked — so net = stake x mult, and the same cards can
- * be re-staked by multiplying. Nothing is replayed, so nothing can be reshuffled.
+ * be re-staked by multiplying. Nothing is replayed, so nothing can be
+ * reshuffled and no outcome can change.
  *
- * WHY IN THE BROWSER
- * It has to answer while signed out, so it reads the local round log rather than
- * the server. That also means it is live during play instead of waiting on a sync.
+ * ON DEMAND, NOT ON DISPLAY
+ * This is a question asked between sessions, not a number watched during play,
+ * so it sits behind a button and opens over the page. Nothing on the page moves
+ * when it opens, which matters on a phone where a shifted button is a mis-tap.
  *
- * COUPLING: the multiplier table below must match sideSettlement() in
- * index.html and SIDE_MULT in src/digest.js. Names are unique within a product,
- * but 'Straight flush' and 'Three of a kind' pay differently in Trilux and
- * Super, so the table is keyed by product and never shared between them.
+ * WHERE THE NUMBERS COME FROM
+ * Signed in, /api/staking covers every session on every device. Signed out, the
+ * same maths runs here against the local round log and the panel says so —
+ * signing out narrows the answer rather than removing it.
+ *
+ * COUPLING: the multiplier table must match sideSettlement() in index.html and
+ * SIDE_MULT in src/digest.js. Names are unique within a product, but 'Straight
+ * flush' and 'Three of a kind' pay differently in Trilux and Super, so the
+ * table is keyed by product and never shared between them.
  */
 (function () {
   'use strict';
@@ -31,24 +38,39 @@
   };
   var LABEL = { pairs: 'Pairs', trilux: 'Trilux', super: 'Trilux Super' };
   var ORDER = ['pairs', 'trilux', 'super'];
-  var TRIALS = 800;            // p to ~0.001; enough to separate 0.04 from 0.2
-  var MIN_BETS = 60;           // below this, say so rather than pronounce
-
-  var lastKey = null, lastHtml = null;
+  var TRIALS = 800;
+  var MIN_BETS = 60;
 
   function money(n) {
-    var v = Math.round(Math.abs(n));
-    return (n < 0 ? '−£' : '£') + v.toLocaleString('en-GB');
+    return (n < 0 ? '−£' : '£')
+      + Math.round(Math.abs(n)).toLocaleString('en-GB');
   }
   function signed(n) {
     return (n > 0 ? '+£' : n < 0 ? '−£' : '£')
       + Math.round(Math.abs(n)).toLocaleString('en-GB');
   }
+  function pctTxt(v) {
+    if (v === null || v === undefined) return '—';
+    return (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v) + '%';
+  }
+  /* "deeper by £0" is not a sentence anyone means. */
+  function dropTxt(delta) {
+    if (Math.round(delta) === 0) return 'worst drop the same as flat';
+    return 'worst drop ' + (delta > 0 ? 'deeper by ' : 'shallower by ') + money(Math.abs(delta));
+  }
+  function plural(n, word) { return n + ' ' + word + (n === 1 ? '' : 's'); }
 
-  /* Every placed side bet in play order. Rounds captured before stake was
-     stored still resolve: a loss gives stake = -net, a win divides by the
-     multiplier its outcome name names. */
-  function bets() {
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+
+  /* ---------------------------------------------------------- local maths --
+   * Only used signed out. Emits the same shape as /api/staking so one renderer
+   * serves both and the two can never drift into different-looking answers. */
+
+  function localBets() {
     var raw;
     try { raw = JSON.parse(localStorage.getItem('bjfRoundLog') || 'null'); } catch (e) { return []; }
     var rounds = (raw && (Array.isArray(raw) ? raw : raw.rounds)) || [];
@@ -81,11 +103,11 @@
       if (cum > peak) peak = cum;
       if (peak - cum > dd) dd = peak - cum;
     }
-    return { pl: cum, dd: dd };
+    return { pl: cum, max_drawdown: dd };
   }
 
-  /* How often chance alone gives a gap this big. Fixed seed, so the figure does
-     not wander between renders and invite a reroll. */
+  /* Fixed seed: a p-value that wanders between openings invites a reroll until
+     it reads well. */
   function luckP(list) {
     var stakes = [], mults = [], actual = 0, i;
     for (i = 0; i < list.length; i++) {
@@ -114,122 +136,341 @@
     return extreme / TRIALS;
   }
 
-  function analyse(all) {
+  function localDigest() {
+    var all = localBets();
+    if (!all.length) return null;
     var staked = 0, i;
     for (i = 0; i < all.length; i++) staked += all[i].stake;
-    var avg = all.length ? staked / all.length : 0;
-    var actual = run(all, function (s) { return s; });
-    var flat = run(all, function () { return avg; });
+    var avg = staked / all.length;
+    var a = run(all, function (s) { return s; });
+    var f = run(all, function () { return avg; });
     var products = ORDER.map(function (p) {
       var mine = all.filter(function (b) { return b.p === p; });
       if (!mine.length) return null;
-      var st = 0;
-      for (i = 0; i < mine.length; i++) st += mine[i].stake;
-      var a = run(mine, function (s) { return s; });
-      var f = run(mine, function () { return st / mine.length; });
+      var st = 0, k;
+      for (k = 0; k < mine.length; k++) st += mine[k].stake;
+      var pa = run(mine, function (s) { return s; });
+      var pf = run(mine, function () { return st / mine.length; });
+      var byBox = {}, dirs = { raised: [], held: [], lowered: [] }, up = [], down = [];
+      mine.forEach(function (b) { (byBox[b.box] = byBox[b.box] || []).push(b); });
+      Object.keys(byBox).forEach(function (kk) {
+        var list = byBox[kk];
+        for (var n = 1; n < list.length; n++) {
+          var d = list[n].stake - list[n - 1].stake;
+          if (d > 0) { dirs.raised.push(list[n]); up.push(d); }
+          else if (d < 0) { dirs.lowered.push(list[n]); down.push(-d); }
+          else dirs.held.push(list[n]);
+        }
+      });
+      var roiOf = function (l) {
+        if (!l.length) return null;
+        var s2 = 0, n2 = 0;
+        l.forEach(function (b) { s2 += b.stake; n2 += b.mult ? b.stake * b.mult : -b.stake; });
+        return { bets: l.length, staked: s2, net: n2, roi_pct: s2 ? Math.round(n2 / s2 * 1000) / 10 : null };
+      };
+      var mean = function (arr) {
+        return arr.length ? Math.round(arr.reduce(function (x, y) { return x + y; }, 0) / arr.length * 100) / 100 : 0;
+      };
+      var wins = mine.filter(function (b) { return b.mult; });
+      var amts = wins.map(function (b) { return b.stake * b.mult; }).sort(function (x, y) { return y - x; });
+      var gross = amts.reduce(function (x, y) { return x + y; }, 0);
+      var stakesOnly = mine.map(function (b) { return b.stake; });
       return {
-        name: LABEL[p], bets: mine.length, staked: st, pl: a.pl,
-        gained: a.pl - f.pl, ddDelta: a.dd - f.dd,
-        p: mine.length >= MIN_BETS ? luckP(mine) : null
+        product: LABEL[p], bets_placed: mine.length, total_staked: st, net_pl: pa.pl,
+        roi_pct: st ? Math.round(pa.pl / st * 1000) / 10 : null,
+        max_drawdown: pa.max_drawdown,
+        wager: { average: Math.round(st / mine.length * 100) / 100,
+                 min: Math.min.apply(null, stakesOnly), max: Math.max.apply(null, stakesOnly) },
+        stake_changes: { raised: up.length, lowered: down.length, held: dirs.held.length,
+                         average_rise: mean(up), average_fall: mean(down) },
+        after_a_stake_change: { raised: roiOf(dirs.raised), held: roiOf(dirs.held), lowered: roiOf(dirs.lowered) },
+        counterfactual: { varying_gained_pl: pa.pl - pf.pl,
+                          varying_added_drawdown: pa.max_drawdown - pf.max_drawdown },
+        luck_test: { p: mine.length >= MIN_BETS ? luckP(mine) : null },
+        concentration: { winning_bets: wins.length,
+          biggest_win_share_pct: gross > 0 ? Math.round((amts[0] || 0) / gross * 1000) / 10 : null,
+          top_5_share_pct: gross > 0 ? Math.round(amts.slice(0, 5).reduce(function (x, y) { return x + y; }, 0) / gross * 1000) / 10 : null }
       };
     }).filter(Boolean);
     return {
-      bets: all.length, staked: staked, avg: avg,
-      pl: actual.pl, gained: actual.pl - flat.pl, ddDelta: actual.dd - flat.dd,
-      flat10: run(all, function () { return 10; }).pl,
+      combined: {
+        bets_placed: all.length, total_staked: staked, average_stake: avg,
+        varying_stakes: a, flat_at_same_average: f,
+        flat_5: run(all, function () { return 5; }),
+        flat_10: run(all, function () { return 10; }),
+        flat_25: run(all, function () { return 25; }),
+        varying_gained_pl: a.pl - f.pl,
+        varying_added_drawdown: a.max_drawdown - f.max_drawdown
+      },
       products: products
     };
   }
+
+  /* --------------------------------------------------------------- render -- */
 
   function styles() {
     if (document.getElementById('bjfStakingCss')) return;
     var st = document.createElement('style');
     st.id = 'bjfStakingCss';
     st.textContent =
-      '#bjfStaking{border:1px solid var(--border);border-radius:13px;padding:13px;margin-top:12px}'
-    + '#bjfStaking .stk-q{font-size:.82rem;color:var(--muted);margin:0 0 6px}'
-    + '#bjfStaking .stk-a{font-size:1.02rem;font-weight:800;color:var(--text);line-height:1.3}'
-    + '#bjfStaking .stk-sub{font-size:.75rem;color:var(--muted);margin-top:4px}'
-    + '#bjfStaking .stk-rows{display:grid;gap:6px;margin-top:11px}'
-    + '#bjfStaking .stk-row{display:grid;grid-template-columns:1fr auto auto;gap:9px;'
-      + 'align-items:baseline;font-size:.8rem;padding-top:6px;border-top:1px solid var(--border)}'
-    + '#bjfStaking .stk-name{font-weight:700;color:var(--text)}'
-    + '#bjfStaking .stk-delta{font-variant-numeric:tabular-nums;font-weight:700}'
-    + '#bjfStaking .stk-tag{font-size:.68rem;letter-spacing:.04em;text-transform:uppercase;'
-      + 'color:var(--muted);white-space:nowrap}'
-    + '#bjfStaking .up{color:var(--green,#0B5D3B)}#bjfStaking .down{color:var(--danger,#A3282C)}'
-    + '#bjfStaking .stk-foot{font-size:.74rem;color:var(--muted);margin-top:10px;line-height:1.45}';
+      '#bjfStakeOverlay{position:fixed;inset:0;z-index:70;display:flex;align-items:flex-end;'
+      + 'justify-content:center;background:rgba(8,20,14,.55);backdrop-filter:blur(3px);'
+      + 'opacity:0;transition:opacity .16s ease}'
+    + '#bjfStakeOverlay.on{opacity:1}'
+    + '#bjfStakeCard{background:var(--panel,#fff);width:100%;max-width:540px;max-height:92vh;'
+      + 'border-radius:20px 20px 0 0;display:flex;flex-direction:column;overflow:hidden;'
+      + 'box-shadow:0 -10px 40px rgba(8,20,14,.3);transform:translateY(14px);'
+      + 'transition:transform .18s ease}'
+    + '#bjfStakeOverlay.on #bjfStakeCard{transform:none}'
+    + '@media(min-width:600px){#bjfStakeOverlay{align-items:center}'
+      + '#bjfStakeCard{border-radius:20px;max-height:88vh}}'
+    + '.stk-head{display:flex;align-items:flex-start;gap:12px;padding:16px 18px 12px;'
+      + 'border-bottom:1px solid var(--border);flex:0 0 auto}'
+    + '.stk-head h3{margin:0;font-size:1.02rem;line-height:1.3}'
+    + '.stk-scope{display:block;font-size:.72rem;color:var(--muted);margin-top:3px;font-weight:600}'
+    + '.stk-x{margin-left:auto;flex:0 0 auto;border:1px solid var(--border);background:#fff;'
+      + 'border-radius:10px;width:38px;height:38px;font-size:1.1rem;line-height:1;color:var(--muted)}'
+    + '.stk-body{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 18px 22px;'
+      + 'display:grid;gap:18px}'
+    + '.stk-verdict{font-size:1.1rem;font-weight:800;color:var(--text);line-height:1.32}'
+    + '.stk-because{font-size:.82rem;color:var(--muted);margin-top:6px;line-height:1.5}'
+    + '.stk-tiles{display:grid;grid-template-columns:1fr 1fr;gap:9px}'
+    + '.stk-tile{border:1px solid var(--border);border-radius:13px;padding:11px 12px}'
+    + '.stk-tile b{display:block;font-size:.68rem;letter-spacing:.05em;text-transform:uppercase;'
+      + 'color:var(--muted);font-weight:700;margin-bottom:5px}'
+    + '.stk-tile s{display:block;text-decoration:none;font-size:1.22rem;font-weight:800;'
+      + 'font-variant-numeric:tabular-nums;line-height:1.1}'
+    + '.stk-tile i{display:block;font-style:normal;font-size:.7rem;color:var(--muted);margin-top:4px}'
+    + '.stk-sec>h4{margin:0 0 4px;font-size:.92rem}'
+    + '.stk-sec>p.lead{margin:0 0 10px;font-size:.78rem;color:var(--muted);line-height:1.5}'
+    + '.stk-prod{border-top:1px solid var(--border);padding-top:9px;margin-top:9px}'
+    + '.stk-prod:first-of-type{border-top:0;padding-top:0;margin-top:0}'
+    + '.stk-prow{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}'
+    + '.stk-prow strong{font-size:.9rem}'
+    + '.stk-delta{margin-left:auto;font-weight:800;font-variant-numeric:tabular-nums;font-size:.92rem}'
+    + '.stk-tag{font-size:.64rem;letter-spacing:.05em;text-transform:uppercase;font-weight:700;'
+      + 'border:1px solid currentColor;border-radius:999px;padding:2px 7px}'
+    + '.stk-meta{font-size:.72rem;color:var(--muted);margin-top:4px;'
+      + 'font-variant-numeric:tabular-nums;line-height:1.5}'
+    + '.up{color:var(--green,#0B5D3B)}.down{color:var(--danger,#A3282C)}'
+    + '.luck{color:var(--muted)}'
+    + '.stk-ladder{display:grid;gap:7px}'
+    + '.stk-lrow{display:grid;grid-template-columns:78px 1fr 74px;gap:9px;align-items:center;'
+      + 'font-size:.76rem;font-variant-numeric:tabular-nums}'
+    + '.stk-lbar{height:15px;background:#eef2ef;border-radius:3px;overflow:hidden}'
+    + '.stk-lbar i{display:block;height:100%}'
+    + '.stk-lval{text-align:right;font-weight:700}'
+    + '.stk-note{font-size:.73rem;color:var(--muted);line-height:1.55;'
+      + 'border-left:3px solid var(--gold,#C8A24A);padding-left:12px}'
+    + '.stk-tbl{width:100%;border-collapse:collapse;font-size:.76rem;'
+      + 'font-variant-numeric:tabular-nums}'
+    + '.stk-tbl th{text-align:right;font-size:.63rem;letter-spacing:.05em;text-transform:uppercase;'
+      + 'color:var(--muted);font-weight:700;padding:0 0 6px}'
+    + '.stk-tbl th:first-child,.stk-tbl td:first-child{text-align:left}'
+    + '.stk-tbl td{text-align:right;padding:6px 0;border-top:1px solid var(--border)}'
+    + '#bjfStakeBtn{width:100%}'
+    + '@media(prefers-reduced-motion:reduce){#bjfStakeOverlay,#bjfStakeCard{transition:none}}';
     document.head.appendChild(st);
   }
 
-  function render() {
-    var host = document.getElementById('bjfStaking');
-    if (!host) return;
-    var all = bets();
-    var key = all.length + ':' + (all.length ? Math.round(all[all.length - 1].stake) : 0);
-    if (key === lastKey) { host.innerHTML = lastHtml; return; }   // the maths is not free
-
-    var html;
-    if (!all.length) {
-      html = '<p class="stk-q">Side-bet staking</p>'
-        + '<div class="stk-sub">Play some rounds with Pairs, Trilux or Trilux Super '
-        + 'staked and this will tell you whether moving those stakes up and down is '
-        + 'doing anything for you.</div>';
-    } else {
-      var d = analyse(all);
-      var early = d.bets < MIN_BETS;
-      var verdict = early
-        ? 'Too early to say — ' + d.bets + ' side bets so far.'
-        : (Math.abs(d.gained) < d.staked * 0.005
-            ? 'Varying your stakes made almost no difference.'
-            : (d.gained > 0 ? 'Varying your stakes is ahead — so far.'
-                            : 'Varying your stakes is behind.'));
-      html = '<p class="stk-q">Is varying your side-bet stakes working?</p>'
-        + '<div class="stk-a">' + verdict + '</div>'
-        + '<div class="stk-sub">Against the same cards staked flat at your own average of '
-        + '\u00a3' + d.avg.toFixed(2) + ': <strong>' + signed(d.gained) + '</strong> in profit, '
-        + '<strong>' + signed(d.ddDelta) + '</strong> on the worst drop. '
-        + d.bets.toLocaleString('en-GB') + ' bets, ' + money(d.staked) + ' staked.</div>'
-        + '<div class="stk-rows">'
-        + d.products.map(function (p) {
-            var tag = p.p === null ? 'too few'
-              : (p.p > 0.05 ? 'luck' : 'real · p ' + p.p.toFixed(2));
-            return '<div class="stk-row"><span class="stk-name">' + p.name + '</span>'
-              + '<span class="stk-delta ' + (p.gained > 0 ? 'up' : 'down') + '">'
-              + signed(p.gained) + '</span>'
-              + '<span class="stk-tag">' + tag + '</span></div>';
-          }).join('')
-        + '</div>'
-        + '<div class="stk-foot">Side bets are settled the moment the cards land, before '
-        + 'you act, so the same cards can be re-staked exactly. &ldquo;Luck&rdquo; means a gap '
-        + 'this size turns up by chance more than 1 time in 20 &mdash; not something to act on. '
-        + 'The same cards at a flat £10 would have returned ' + money(d.flat10) + '.</div>';
+  function ladder(c) {
+    var items = [
+      ['Flat £5', c.flat_5.pl, false], ['Flat £10', c.flat_10.pl, false],
+      ['Flat £25', c.flat_25.pl, false]
+    ];
+    // Its own rung only when it is not already one of the three above — two rows
+    // reading "Flat £5" is a bug on the screen even when the maths is right.
+    var avg = Math.round(c.average_stake);
+    if (avg !== 5 && avg !== 10 && avg !== 25) {
+      items.push(['Your average', c.flat_at_same_average.pl, false]);
     }
-    lastKey = key; lastHtml = html; host.innerHTML = html;
+    items.push(['What you did', c.varying_stakes.pl, true]);
+    var max = Math.max.apply(null, items.map(function (i) { return Math.abs(i[1]); })) || 1;
+    return '<div class="stk-ladder">' + items.map(function (i) {
+      return '<div class="stk-lrow"><span>' + i[0] + '</span>'
+        + '<span class="stk-lbar"><i style="width:' + (Math.abs(i[1]) / max * 100).toFixed(1)
+        + '%;background:' + (i[2] ? 'var(--green,#0B5D3B)' : '#b9c4bd') + '"></i></span>'
+        + '<span class="stk-lval ' + (i[1] >= 0 ? 'up' : 'down') + '">' + money(i[1]) + '</span></div>';
+    }).join('') + '</div>';
+  }
+
+  function body(d, scope) {
+    var c = d.combined;
+    var small = Math.abs(c.varying_gained_pl) < c.total_staked * 0.005;
+    var verdict = c.bets_placed < MIN_BETS
+      ? 'Too early to say \u2014 only ' + c.bets_placed + ' side '
+        + (c.bets_placed === 1 ? 'bet' : 'bets') + ' so far.'
+      : (small
+          ? 'Moving your stakes up and down made almost no difference.'
+          : (c.varying_gained_pl > 0
+              ? 'Varying your stakes came out ahead over this run.'
+              : 'Varying your stakes came out behind.'));
+
+    var tiles = '<div class="stk-tiles">'
+      + '<div class="stk-tile"><b>Profit</b><s class="' + (c.varying_gained_pl >= 0 ? 'up' : 'down') + '">'
+      + signed(c.varying_gained_pl) + '</s><i>versus the same cards flat</i></div>'
+      + '<div class="stk-tile"><b>Worst drop</b><s class="' + (c.varying_added_drawdown <= 0 ? 'up' : 'down') + '">'
+      + signed(c.varying_added_drawdown) + '</s><i>' + (c.varying_added_drawdown > 0 ? 'deeper than flat' : 'shallower than flat') + '</i></div>'
+      + '</div>';
+
+    var prods = d.products.map(function (p) {
+      var g = p.counterfactual.varying_gained_pl;
+      var pv = p.luck_test && typeof p.luck_test.p === 'number' ? p.luck_test.p : null;
+      var tag = pv === null ? '<span class="stk-tag luck">too few bets</span>'
+        : (pv > 0.05 ? '<span class="stk-tag luck">luck</span>'
+                     : '<span class="stk-tag ' + (g > 0 ? 'up' : 'down') + '">real · p ' + pv.toFixed(2) + '</span>');
+      var sc = p.stake_changes || {};
+      return '<div class="stk-prod"><div class="stk-prow"><strong>' + esc(p.product) + '</strong>'
+        + tag + '<span class="stk-delta ' + (g > 0 ? 'up' : 'down') + '">' + signed(g) + '</span></div>'
+        + '<div class="stk-meta">' + money(p.total_staked) + ' staked · '
+        + pctTxt(p.roi_pct) + ' return · '
+        + dropTxt(p.counterfactual.varying_added_drawdown) + '<br>'
+        + 'stakes £' + p.wager.min + '–£' + p.wager.max
+        + ' · raised ' + (sc.raised || 0) + ', lowered ' + (sc.lowered || 0)
+        + ', left alone ' + (sc.held || 0) + '</div></div>';
+    }).join('');
+
+    var a = d.products.map(function (p) {
+      var s = p.after_a_stake_change || {};
+      var cell = function (x) {
+        return '<td class="' + (x && x.roi_pct >= 0 ? 'up' : 'down') + '">'
+          + (x ? pctTxt(x.roi_pct) : '—') + '</td>';
+      };
+      return '<tr><td>' + esc(p.product) + '</td>' + cell(s.raised) + cell(s.held) + cell(s.lowered) + '</tr>';
+    }).join('');
+
+    /* Only where it is both true and sayable: below ten wins, "its five biggest"
+       is not even arithmetically sensible. */
+    var thin = d.products.filter(function (p) {
+      return p.concentration && p.concentration.winning_bets >= 10
+        && p.concentration.top_5_share_pct > 30;
+    });
+    /* Too few stake changes and this table is three columns of noise. */
+    var moves = d.products.reduce(function (a, p) {
+      var sc = p.stake_changes || {};
+      return a + (sc.raised || 0) + (sc.lowered || 0);
+    }, 0);
+
+    return '<div class="stk-body">'
+      + '<div><div class="stk-verdict">' + verdict + '</div>'
+      + '<div class="stk-because">Measured against the very same cards staked flat at your own '
+      + 'average of £' + c.average_stake.toFixed(2) + '. '
+      + c.bets_placed.toLocaleString('en-GB') + ' side bets, ' + money(c.total_staked) + ' staked.</div></div>'
+      + tiles
+      + '<div class="stk-sec"><h4>Each bet on its own</h4>'
+      + '<p class="lead">Kept apart, so a win on one cannot hide a loss on another.</p>'
+      + prods + '</div>'
+      + (moves < 30 ? '' : '<div class="stk-sec"><h4>What happened after you moved a stake</h4>'
+      + '<p class="lead">Return on the very next bet, split by what you did to the stake before it.</p>'
+      + '<table class="stk-tbl"><thead><tr><th></th><th>Raised</th><th>Left</th><th>Lowered</th></tr></thead>'
+      + '<tbody>' + a + '</tbody></table>'
+      + '<div class="stk-note" style="margin-top:11px">These gaps look large and mostly are not. '
+      + 'Anything marked <em>luck</em> above turns up this big by chance more than one time in twenty, '
+      + 'so it is not worth changing how you bet.'
+      + (thin.length ? ' ' + esc(thin[0].product) + ' rests on just '
+          + plural(thin[0].concentration.winning_bets, 'winning bet') + ', and its five biggest carry '
+          + thin[0].concentration.top_5_share_pct + '% of everything it paid — at those odds a single card writes the column.' : '')
+      + '</div></div>')
+      + '<div class="stk-sec"><h4>What would actually change it</h4>'
+      + '<p class="lead">The same cards, every bet at one flat stake.</p>'
+      + ladder(c)
+      + '<div class="stk-note" style="margin-top:11px">Double the stake and you double the result; '
+      + 'halve it and you halve it. Moving up and down around the same average does neither. '
+      + 'Side bets are settled the instant the cards land, before you act, which is why the same '
+      + 'cards can be re-staked exactly — nothing here is a guess.</div></div>'
+      + '<p class="stk-because" style="margin:0">' + esc(scope) + '</p>'
+      + '</div>';
+  }
+
+  function close() {
+    var o = document.getElementById('bjfStakeOverlay');
+    if (!o) return;
+    o.classList.remove('on');
+    document.body.style.overflow = '';
+    setTimeout(function () { if (o.parentNode) o.parentNode.removeChild(o); }, 180);
+    document.removeEventListener('keydown', onKey);
+  }
+  function onKey(e) { if (e.key === 'Escape') close(); }
+
+  function open(inner, title, scope) {
+    styles();
+    close();
+    var o = document.createElement('div');
+    o.id = 'bjfStakeOverlay';
+    o.innerHTML = '<div id="bjfStakeCard" role="dialog" aria-modal="true" aria-label="Side-bet staking">'
+      + '<div class="stk-head"><div><h3>' + esc(title) + '</h3>'
+      + (scope ? '<span class="stk-scope">' + esc(scope) + '</span>' : '')
+      + '</div><button type="button" class="stk-x" aria-label="Close">✕</button></div>'
+      + inner + '</div>';
+    document.body.appendChild(o);
+    document.body.style.overflow = 'hidden';
+    requestAnimationFrame(function () { o.classList.add('on'); });
+    o.querySelector('.stk-x').addEventListener('click', close);
+    o.addEventListener('click', function (e) { if (e.target === o) close(); });
+    document.addEventListener('keydown', onKey);
+    o.querySelector('.stk-x').focus();
+  }
+
+  function show() {
+    var btn = document.getElementById('bjfStakeBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Working it out…'; }
+    var done = function () {
+      if (btn) { btn.disabled = false; btn.textContent = 'Check my side bets'; }
+    };
+
+    fetch('/api/staking', { credentials: 'same-origin' })
+      .then(function (r) { if (!r.ok) throw new Error(String(r.status)); return r.json(); })
+      .then(function (d) {
+        done();
+        if (!d || !d.products || !d.products.length) return fallback('No side bets have been recorded yet.');
+        open(body(d, 'Covers every session on every device.'), 'Is varying your stakes working?',
+          'All your recorded play');
+      })
+      .catch(function () { done(); fallback(null); });
+  }
+
+  /* Signed out, or the Worker unreachable: answer from what is on this device
+     and say so, rather than showing nothing. */
+  function fallback(msg) {
+    var d = null;
+    try { d = localDigest(); } catch (e) { d = null; }
+    if (!d) {
+      open('<div class="stk-body"><div class="stk-verdict">Nothing to check yet.</div>'
+        + '<div class="stk-because">' + esc(msg || 'Play some rounds with Pairs, Trilux or '
+        + 'Trilux Super staked, then come back and this will tell you whether moving those '
+        + 'stakes around is doing anything for you.') + '</div></div>',
+        'Is varying your stakes working?', '');
+      return;
+    }
+    open(body(d, 'Signed out, so this covers the play stored on this device only. '
+      + 'Sign in to include every session.'),
+      'Is varying your stakes working?', 'This device only');
   }
 
   function mount() {
-    var diag = document.getElementById('diagnosis');
-    if (!diag || document.getElementById('bjfStaking')) return;
+    if (document.getElementById('bjfStakeBtn')) return;
+    var anchor = document.getElementById('shareReportBtn');
+    var host = anchor && anchor.parentNode;
+    if (!host) return;
     styles();
-    var box = document.createElement('div');
-    box.id = 'bjfStaking';
-    diag.parentNode.insertBefore(box, diag);
-    render();
 
-    // refreshAnalysis() runs after every settled round; follow it so the panel
-    // is current without polling.
-    if (typeof window.refreshAnalysis === 'function') {
-      var orig = window.refreshAnalysis;
-      window.refreshAnalysis = function () {
-        var r = orig.apply(this, arguments);
-        try { render(); } catch (e) { /* never break the session report */ }
-        return r;
-      };
-    }
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'bjfStakeBtn';
+    btn.className = 'secondary';
+    btn.textContent = 'Check my side bets';
+    host.insertBefore(btn, anchor);
+
+    var note = document.createElement('p');
+    note.className = 'fine-print';
+    note.textContent = 'Tells you whether varying your Pairs, Trilux and Super stakes '
+      + 'is doing anything — against the same cards played flat.';
+    host.insertBefore(note, anchor);
+
+    btn.addEventListener('click', show);
   }
 
-  window.BJF_STAKING_RENDER = render;
+  window.BJF_STAKING_OPEN = show;
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
   else mount();
 })();
