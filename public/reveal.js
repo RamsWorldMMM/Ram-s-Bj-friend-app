@@ -1329,8 +1329,24 @@
     else window.addEventListener('load', function () { setTimeout(freshStartOnce, 0); });
   }
 
+  /* The side-bet staking panel lives in its own file, but index.html is the
+     untouched engine and is held to exactly nine diff hunks from the original —
+     a fifth <script> tag would be a tenth. Loading it from here keeps that
+     promise and keeps the analytics out of this file. */
+  function loadStakingPanel() {
+    try {
+      if (document.getElementById('bjfStakingJs')) return;
+      var sc = document.createElement('script');
+      sc.id = 'bjfStakingJs';
+      sc.src = '/staking.js';
+      sc.defer = true;
+      document.head.appendChild(sc);
+    } catch (e) { /* the session report stands without it */ }
+  }
+
   function boot() {
     scheduleFreshStart();
+    loadStakingPanel();
     injectStyles();
     relocateTopBanners();
     install();
