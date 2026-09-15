@@ -677,6 +677,7 @@
     currentUser = user;
     el('cloudOverlay').classList.add('hidden');
     setStatus('ok', user.username);
+    showPublishControl(user.canPublish === true);
     loadHistory();
     if (opts && opts.offerRestore) maybeRestore();
     if (syncPending) flushSync();
@@ -838,6 +839,15 @@
    * every settled round, and committing that often would bury the repository
    * history in hundreds of near-identical commits.
    */
+  /* Shown only for the account whose record these files are. Sign out and it
+     goes again, so it is never sitting there under the wrong name. */
+  function showPublishControl(allowed) {
+    ['publishDataBtn', 'publishNote'].forEach(function (id) {
+      var e = el(id);
+      if (e) e.classList.toggle('hidden', !allowed);
+    });
+  }
+
   function injectPublishControl() {
     if (el('publishDataBtn')) return;
     // Sits directly above "Analyse with Gemini". Both hand the session over for
@@ -850,6 +860,10 @@
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.id = 'publishDataBtn';
+    // Hidden until the server says this account is the publisher. The files are
+    // read as one player's record, so a stray press from another account
+    // rewrites that record — which has already happened once.
+    btn.classList.add('hidden');
     // Named for what he is doing, not for what the machine does. "Publish
     // data" describes plumbing; "Submit to ChatGPT" is the act he has in mind.
     btn.className = 'primary';
@@ -857,7 +871,7 @@
     host.insertBefore(btn, anchor);
 
     var note = document.createElement('p');
-    note.className = 'fine-print';
+    note.className = 'fine-print hidden';
     note.id = 'publishNote';
     note.textContent = 'Sends your play to ChatGPT so it can review it. '
       + 'Press this after a session.';
@@ -925,6 +939,7 @@
       if (!confirm('Sign out? Local play continues, but nothing will sync.')) return;
       api(API.logout, { method: 'POST' }).then(function () {
         currentUser = null;
+        showPublishControl(false);
         setStatus('', 'Signed out');
         loadHistory();
         el('cloudOverlay').classList.remove('hidden');
