@@ -268,7 +268,15 @@
       + 'color:var(--muted);font-weight:700;padding:0 0 6px}'
     + '.stk-tbl th:first-child,.stk-tbl td:first-child{text-align:left}'
     + '.stk-tbl td{text-align:right;padding:6px 0;border-top:1px solid var(--border)}'
-    + '#bjfStakeBtn{width:100%}'
+    /* It sat between two solid-green buttons wearing .secondary — white on white
+       with a hairline border — and read as disabled rather than as a control.
+       Gold is the app's other brand colour (the hairline under the header) and
+       is on no other button, so it gets its own identity instead of becoming a
+       third green. #2A2206 on #C9A227 is past AA at this size. */
+    + '#bjfStakeBtn{width:100%;background:linear-gradient(180deg,#D8B23A 0%,#C9A227 100%);'
+      + 'border-color:#A8861C;color:#2A2206;font-weight:800}'
+    + '#bjfStakeBtn:hover{background:linear-gradient(180deg,#C9A227 0%,#B8931F 100%)}'
+    + '#bjfStakeBtn:disabled{opacity:.62}'
     + '@media(prefers-reduced-motion:reduce){#bjfStakeOverlay,#bjfStakeCard{transition:none}}';
     document.head.appendChild(st);
   }
@@ -463,8 +471,7 @@
 
     var note = document.createElement('p');
     note.className = 'fine-print';
-    note.textContent = 'Tells you whether varying your Pairs, Trilux and Super stakes '
-      + 'is doing anything — against the same cards played flat.';
+    note.textContent = 'Is moving your side-bet stakes up and down actually working?';
     host.insertBefore(note, anchor);
 
     btn.addEventListener('click', show);
