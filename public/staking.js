@@ -277,6 +277,41 @@
       + 'border-color:#A8861C;color:#2A2206;font-weight:800}'
     + '#bjfStakeBtn:hover{background:linear-gradient(180deg,#C9A227 0%,#B8931F 100%)}'
     + '#bjfStakeBtn:disabled{opacity:.62}'
+    /* Four full-width buttons and two paragraphs ran to 428px of a phone screen
+       before a single figure was visible. Two to a row halves it.
+       .section-heading is flex, and index.html's phone rule forces it to a
+       column; both are single-class selectors, so this two-class one wins
+       wherever it sits in the cascade. */
+    + '.section-heading.bjf-actions{display:grid;grid-template-columns:1fr 1fr;'
+      + 'gap:9px;align-items:stretch}'
+    /* The title and the publish status line are not buttons — they take the
+       full width and keep their reading order. */
+    + '.section-heading.bjf-actions>div:first-child,'
+      + '.section-heading.bjf-actions>p{grid-column:1/-1;margin:0}'
+    /* align-self, not just the container's align-items: "Analyse with Gemini"
+       wraps to two lines at half width while "Submit to ChatGPT" does not, and
+       without this the pair sits 10px out of line with each other. Stretching
+       equalises them without shrinking the type to force one line. */
+    /* cloud.js gives its own button a 10px top margin for the old stacked
+       layout. In a grid cell that margin is inset, so the pair sat 10px out of
+       line; the grid's gap owns the spacing here. */
+    + '.section-heading.bjf-actions>button{width:100%;min-height:48px;align-self:stretch;'
+      /* Something gives this button a 10px top margin that a full scan of the
+         cascade does not turn up — no matching rule, no inline style, yet it
+         computes. In a grid cell that margin is inset, so the pair sat 10px
+         out of line. Scoped to this container only, where the gap owns all
+         the spacing and no margin should survive anyway. */
+      + 'margin:0 !important;'
+      + 'display:flex;align-items:center;justify-content:center;text-align:center;'
+      + 'white-space:normal;line-height:1.2;padding:10px 12px}'
+    /* Pairing by what the button does: the two that hand the session off for
+       review sit together, the two that answer it here sit together. */
+    + '.section-heading.bjf-actions>#publishDataBtn{order:1}'
+    + '.section-heading.bjf-actions>#shareReportBtn{order:2}'
+    + '.section-heading.bjf-actions>#publishNote{order:3}'
+    + '.section-heading.bjf-actions>#bjfStakeBtn{order:4}'
+    + '.section-heading.bjf-actions>#copyReportBtn{order:5}'
+    + '@media(max-width:340px){.section-heading.bjf-actions{grid-template-columns:1fr}}'
     + '@media(prefers-reduced-motion:reduce){#bjfStakeOverlay,#bjfStakeCard{transition:none}}';
     document.head.appendChild(st);
   }
@@ -469,10 +504,18 @@
     btn.textContent = 'Check my side bets';
     host.insertBefore(btn, anchor);
 
-    var note = document.createElement('p');
-    note.className = 'fine-print';
-    note.textContent = 'Is moving your side-bet stakes up and down actually working?';
-    host.insertBefore(note, anchor);
+    // No caption. The label says what it does and the sheet asks the question
+    // in its own title; a third paragraph here only pushed the buttons further
+    // down the screen.
+    host.classList.add('bjf-actions');
+    /* One of these buttons computes a 10px top margin that no rule in the
+       document accounts for — a full CSSOM scan finds nothing, there is no
+       inline style, and a scoped `margin:0 !important` does not shift it. In a
+       grid cell that margin is inset, so the pair sits out of line. Setting it
+       on the element ends the argument; the grid's gap owns all spacing here. */
+    [].forEach.call(host.children, function (e) {
+      if (e.tagName === 'BUTTON') e.style.setProperty('margin', '0', 'important');
+    });
 
     btn.addEventListener('click', show);
   }
