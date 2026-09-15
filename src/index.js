@@ -27,6 +27,17 @@ const error = (message, status = 400) => json({ error: message }, { status });
 /** Cookies must not be marked Secure over plain-http localhost dev. */
 const isSecure = (request) => new URL(request.url).protocol === 'https:';
 
+/* Who may publish. The digests are read as one player's record, so the account
+ * that writes them has to be fixed rather than "whoever is signed in". Username
+ * comparison is case-insensitive because the users table is COLLATE NOCASE. */
+function publisherName(env) {
+  return (env.PUBLISH_USER || 'ram').trim();
+}
+function canPublish(env, user) {
+  return String(user?.username || '').trim().toLowerCase()
+    === publisherName(env).toLowerCase();
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -91,7 +102,7 @@ async function route(request, env, ctx, url) {
 
     const token = await issueToken(user.id, env.AUTH_SECRET);
     return json(
-      { ok: true, user: { id: user.id, username: user.username } },
+      { ok: true, user: { id: user.id, username: user.username, canPublish: canPublish(env, user) } },
       { headers: { 'Set-Cookie': sessionCookie(token, { secure: isSecure(request) }) } }
     );
   }
@@ -109,7 +120,7 @@ async function route(request, env, ctx, url) {
   if (!user) return error('Not authenticated', 401);
 
   if (path === '/api/me' && method === 'GET') {
-    return json({ user });
+    return json({ user: { ...user, canPublish: canPublish(env, user) } });
   }
 
   // Persist a session snapshot. Called after every settled round.
@@ -198,7 +209,16 @@ async function route(request, env, ctx, url) {
   }
 
   // Pushes the digests to the repository Ram's ChatGPT already reads.
+  //
+  // One account only. The published files are read as "Ram's play", so a test
+  // account publishing two rounds at 40% accuracy describes him as a beginner —
+  // which is exactly what happened once. The button is hidden for everyone else,
+  // but the button is a courtesy and this check is the actual rule.
   if (path === '/api/publish' && method === 'POST') {
+    if (!canPublish(env, user)) {
+      return error('Only ' + publisherName(env) + ' can publish gameplay data. '
+        + 'These files are read as that account\'s record.', 403);
+    }
     try {
       const result = await publishDigests(env, user.id, { appVersion: '1.4.7' });
       return json(result);
