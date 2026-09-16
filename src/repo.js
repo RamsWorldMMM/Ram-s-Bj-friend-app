@@ -144,6 +144,7 @@ export async function exportSessions(db, userId, sessionId) {
   const cols = `id, started_at, updated_at, app_version, strategy_version,
                 rules_profile, mode, rounds, round_log_json, round_log_meta,
                 decisions, correct, mistakes_count,
+                state_json,
                 start_bankroll, bankroll, main_pl, pairs_pl, trilux_pl, super_pl,
                 max_drawdown, total_main_staked, total_side_staked`;
   const q = sessionId

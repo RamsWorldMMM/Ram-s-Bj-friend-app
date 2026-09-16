@@ -10,7 +10,7 @@ import * as repo from './repo.js';
 import { analyseSession } from './vertex.js';
 import { rowsForSession, toCSV, caveatsFor, COLUMNS } from './export.js';
 import { ensureSchema, schemaReport } from './migrate.js';
-import { buildDigests, buildStakingDigest } from './digest.js';
+import { buildDigests, buildStakingDigest, buildReportDigest } from './digest.js';
 import { publishDigests } from './publish.js';
 
 const json = (data, init = {}) => new Response(JSON.stringify(data), {
@@ -201,11 +201,15 @@ async function route(request, env, ctx, url) {
   // for it to consume, these are not.
   if (path === '/api/digests' && method === 'GET') {
     const sessions = await repo.exportSessions(env.DB, user.id, null);
-    const digests = buildDigests(sessions, {
-      generatedAt: new Date().toISOString(),
-      appVersion: '1.4.7',
+    const generatedAt = new Date().toISOString();
+    const digests = buildDigests(sessions, { generatedAt, appVersion: '1.4.7' });
+    // Everything the publish button writes, so what will be published can be
+    // inspected without publishing it.
+    return json({
+      ...digests,
+      staking: buildStakingDigest(sessions, { generatedAt }),
+      reports: buildReportDigest(sessions, { generatedAt }),
     });
-    return json(digests);
   }
 
   // Pushes the digests to the repository Ram's ChatGPT already reads.

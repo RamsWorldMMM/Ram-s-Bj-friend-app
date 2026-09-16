@@ -9,6 +9,13 @@ open the one that answers the question rather than the biggest one available.
 | `shoes.json` | shoe | Anything shoe-by-shoe |
 | `mistakes.json` | situation | Which mistakes actually repeat |
 | `staking.json` | side-bet product | Whether varying the side-bet stakes helped |
+| `reports.json` | session | One session in detail — hands, actions, boxes, streaks, every mistake |
+
+`reports.json` is the session report that used to be copied out of the app and
+pasted in by hand. It holds what only makes sense inside one session: the mix
+of hands dealt and actions chosen, how each box did, the longest runs, and
+every mistake written out separately. For totals across all sessions read
+`summary.json`; this file deliberately does not aggregate.
 
 `staking.json` answers one question: did varying the Pairs, Trilux and Trilux
 Super stakes improve profit or reduce drawdown, against the same cards played

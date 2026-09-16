@@ -9,7 +9,7 @@
  * conflict, which is what keeps two publishes from silently clobbering.
  */
 
-import { buildDigests, buildStakingDigest } from './digest.js';
+import { buildDigests, buildStakingDigest, buildReportDigest } from './digest.js';
 import * as repo from './repo.js';
 
 const API = 'https://api.github.com';
@@ -83,6 +83,9 @@ export async function publishDigests(env, userId, opts = {}) {
     // Answers the side-bet staking question directly, rather than shipping the
     // round-level data and hoping the arithmetic is done correctly downstream.
     ['data/staking.json', buildStakingDigest(sessions, { generatedAt })],
+    // The report Ram was copying out by hand and pasting in. Published, so the
+    // button carries everything the paste did and he no longer has to do both.
+    ['data/reports.json', buildReportDigest(sessions, { generatedAt })],
   ];
 
   const rounds = digests.summary.lifetime.rounds;
