@@ -477,3 +477,111 @@ export function buildStakingDigest(sessions, meta = {}) {
     products,
   };
 }
+
+/* ---------------------------------------------------------------- reports ---
+ * The session report Ram has been copying out of the app and pasting into
+ * ChatGPT by hand, as JSON, one entry per session.
+ *
+ * It exists because the other digests do not carry it. summary.json reduces a
+ * session to money and accuracy; this keeps the things that only make sense
+ * within one session — which hands he was dealt, how he split his actions, how
+ * each box did, how long the runs went — and the mistakes written out one by
+ * one rather than grouped into patterns.
+ *
+ * Everything here is read from the stored `state` object, which is the same
+ * object the app builds the on-screen report from. So this is the pasted report,
+ * not a reconstruction of it.
+ */
+
+const MAX_MISTAKES_LISTED = 150;   // a bad session must not swell the file
+
+function reportForSession(s) {
+  let st = null;
+  try { st = s.state_json ? JSON.parse(s.state_json) : null; } catch { return null; }
+  if (!st) return null;
+
+  const mix = st.decisionMix || {};
+  const boxes = Object.entries(st.boxStats || {})
+    .filter(([, b]) => (b.decisions > 0 || b.mainPL !== 0))
+    .map(([box, b]) => ({
+      box: Number(box),
+      decisions: b.decisions || 0,
+      correct: b.correct || 0,
+      accuracy_pct: pct(b.correct || 0, b.decisions || 0),
+      main_pl: round2(b.mainPL),
+    }));
+
+  const mainStaked = Number(st.totalMainStaked) || 0;
+  const sideStaked = Number(st.totalSideStaked) || 0;
+  const all = Array.isArray(st.mistakes) ? st.mistakes : [];
+
+  return {
+    session_id: s.id,
+    started_at: s.started_at,
+    rounds: Number(st.rounds) || 0,
+    decisions: Number(st.decisions) || 0,
+    correct: Number(st.correct) || 0,
+    mistakes: all.length,
+    accuracy_pct: pct(st.correct || 0, st.decisions || 0),
+
+    // What he was actually asked to decide, and what he chose. Two sessions with
+    // the same accuracy can be completely different hands.
+    decision_mix: {
+      hard_hands: mix.hard || 0, soft_hands: mix.soft || 0, pairs: mix.pair || 0,
+      hit: mix.hit || 0, stand: mix.stand || 0, double: mix.double || 0, split: mix.split || 0,
+    },
+    box_performance: boxes,
+    streaks: {
+      longest_winning_rounds: Number(st.longestWinStreak) || 0,
+      longest_losing_rounds: Number(st.longestLossStreak) || 0,
+    },
+    largest_main_wager: round2(st.largestMainBet),
+    bankroll: {
+      start: round2(st.start), end: round2(st.bankroll),
+      highest: round2(st.high), lowest: round2(st.low),
+      range: round2((Number(st.high) || 0) - (Number(st.low) || 0)),
+      max_drawdown: round2(st.maxDrawdown),
+    },
+    side_bet_share_of_stakes_pct: pct(sideStaked, mainStaked + sideStaked),
+
+    mistakes_listed: Math.min(all.length, MAX_MISTAKES_LISTED),
+    mistakes_detail: all.slice(0, MAX_MISTAKES_LISTED).map((m) => ({
+      round: m.round, box: m.box,
+      hand: m.hand, hand_value: m.label,
+      dealer_card: m.dealer,
+      chose: m.chosen, correct_play: m.correct,
+    })),
+  };
+}
+
+/** One report per session — the thing Ram used to paste, published instead. */
+export function buildReportDigest(sessions, meta = {}) {
+  const reports = sessions.map(reportForSession).filter(Boolean)
+    .sort((a, b) => String(a.started_at || '').localeCompare(String(b.started_at || '')));
+  const capped = reports.filter((r) => r.mistakes > r.mistakes_listed);
+
+  return {
+    what_this_is: 'The per-session report, one entry per session — the detail that '
+      + 'only means anything inside a single session. Money is pounds. For totals '
+      + 'across every session read summary.json instead; this file deliberately '
+      + 'does not aggregate.',
+    generated_at: meta.generatedAt || null,
+    read_this_first: [
+      'decision_mix is what he was dealt and what he chose, not what was correct. '
+        + 'Two sessions at the same accuracy can be entirely different hands, and '
+        + 'comparing accuracy without it hides that.',
+      'mistakes_detail lists each mistake separately, unlike mistakes.json which '
+        + 'groups them into repeating patterns. Use this to see a single session, '
+        + 'that one to see a habit.',
+      'bankroll.range is the high-water mark minus the low-water mark, which is '
+        + 'NOT the same as max_drawdown — drawdown is the worst fall from a peak, '
+        + 'and is the honest measure of how bad it got.',
+      capped.length
+        ? `${capped.length} session(s) had more mistakes than the ${MAX_MISTAKES_LISTED} `
+          + 'listed here; mistakes is the true count and mistakes_listed is how many '
+          + 'appear below.'
+        : 'Every mistake is listed in full; none were truncated.',
+    ],
+    sessions: reports,
+  };
+}
