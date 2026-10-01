@@ -1,6 +1,6 @@
 {
  "what_this_is": "The per-session report, one entry per session — the detail that only means anything inside a single session. Money is pounds. For totals across every session read summary.json instead; this file deliberately does not aggregate.",
- "generated_at": "2026-09-30T12:49:01.612Z",
+ "generated_at": "2026-10-01T04:09:05.247Z",
  "read_this_first": [
   "decision_mix is what he was dealt and what he chose, not what was correct. Two sessions at the same accuracy can be entirely different hands, and comparing accuracy without it hides that.",
   "mistakes_detail lists each mistake separately, unlike mistakes.json which groups them into repeating patterns. Use this to see a single session, that one to see a habit.",
@@ -1385,52 +1385,147 @@
   {
    "session_id": "68bb7f21-a264-44a8-85bd-94ae77532b9c",
    "started_at": "2026-09-30 06:35:59",
-   "rounds": 53,
-   "decisions": 150,
-   "correct": 150,
-   "mistakes": 0,
-   "accuracy_pct": 100,
+   "rounds": 127,
+   "decisions": 354,
+   "correct": 352,
+   "mistakes": 2,
+   "accuracy_pct": 99.4,
    "decision_mix": {
-    "hard_hands": 124,
-    "soft_hands": 17,
-    "pairs": 9,
-    "hit": 66,
-    "stand": 63,
-    "double": 17,
-    "split": 4
+    "hard_hands": 299,
+    "soft_hands": 34,
+    "pairs": 21,
+    "hit": 155,
+    "stand": 157,
+    "double": 33,
+    "split": 9
    },
    "box_performance": [
     {
      "box": 1,
-     "decisions": 83,
-     "correct": 83,
-     "accuracy_pct": 100,
-     "main_pl": 4800
+     "decisions": 186,
+     "correct": 184,
+     "accuracy_pct": 98.9,
+     "main_pl": 10800
     },
     {
      "box": 2,
-     "decisions": 67,
-     "correct": 67,
+     "decisions": 168,
+     "correct": 168,
      "accuracy_pct": 100,
-     "main_pl": 6600
+     "main_pl": 9600
     }
    ],
    "streaks": {
-    "longest_winning_rounds": 4,
+    "longest_winning_rounds": 5,
     "longest_losing_rounds": 8
    },
-   "largest_main_wager": 900,
+   "largest_main_wager": 1050,
    "bankroll": {
     "start": 10000,
-    "end": 22185,
-    "highest": 24635,
+    "end": 23650,
+    "highest": 30080,
     "lowest": 5030,
-    "range": 19605,
-    "max_drawdown": 6100
+    "range": 25050,
+    "max_drawdown": 8530
    },
-   "side_bet_share_of_stakes_pct": 19.8,
-   "mistakes_listed": 0,
-   "mistakes_detail": []
+   "side_bet_share_of_stakes_pct": 21.2,
+   "mistakes_listed": 2,
+   "mistakes_detail": [
+    {
+     "round": 57,
+     "box": 1,
+     "hand": "A♠ 6♦",
+     "hand_value": "Soft 17",
+     "dealer_card": "2♦",
+     "chose": "Double",
+     "correct_play": "Hit"
+    },
+    {
+     "round": 73,
+     "box": 1,
+     "hand": "2♣ 3♠ K♠",
+     "hand_value": "Hard 15",
+     "dealer_card": "6♦",
+     "chose": "Hit",
+     "correct_play": "Stand"
+    }
+   ]
+  },
+  {
+   "session_id": "2528b3cc-1a1e-492d-bbb3-11b7d8c638c1",
+   "started_at": "2026-10-01 04:04:51",
+   "rounds": 23,
+   "decisions": 83,
+   "correct": 81,
+   "mistakes": 2,
+   "accuracy_pct": 97.6,
+   "decision_mix": {
+    "hard_hands": 72,
+    "soft_hands": 7,
+    "pairs": 4,
+    "hit": 39,
+    "stand": 38,
+    "double": 4,
+    "split": 2
+   },
+   "box_performance": [
+    {
+     "box": 1,
+     "decisions": 31,
+     "correct": 30,
+     "accuracy_pct": 96.8,
+     "main_pl": -2875
+    },
+    {
+     "box": 2,
+     "decisions": 33,
+     "correct": 33,
+     "accuracy_pct": 100,
+     "main_pl": -525
+    },
+    {
+     "box": 3,
+     "decisions": 19,
+     "correct": 18,
+     "accuracy_pct": 94.7,
+     "main_pl": -1750
+    }
+   ],
+   "streaks": {
+    "longest_winning_rounds": 5,
+    "longest_losing_rounds": 4
+   },
+   "largest_main_wager": 500,
+   "bankroll": {
+    "start": 12000,
+    "end": 14115,
+    "highest": 14525,
+    "lowest": 330,
+    "range": 14195,
+    "max_drawdown": 12185
+   },
+   "side_bet_share_of_stakes_pct": 22.6,
+   "mistakes_listed": 2,
+   "mistakes_detail": [
+    {
+     "round": 18,
+     "box": 1,
+     "hand": "3♣ 7♦",
+     "hand_value": "Hard 10",
+     "dealer_card": "6♦",
+     "chose": "Hit",
+     "correct_play": "Double"
+    },
+    {
+     "round": 18,
+     "box": 3,
+     "hand": "3♣ 6♥",
+     "hand_value": "Hard 9",
+     "dealer_card": "6♦",
+     "chose": "Hit",
+     "correct_play": "Double"
+    }
+   ]
   }
  ]
 }
