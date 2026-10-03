@@ -1344,9 +1344,86 @@
     } catch (e) { /* the session report stands without it */ }
   }
 
+  /* SIDE-BET QUICK AMOUNTS
+   *
+   * Ram stakes £50-£150 a side now, but the quick buttons still offered
+   * £0/£5/£10/£25, so setting up a round meant a dozen taps on the stepper.
+   *
+   * No engine change is needed: the buttons' own handler reads data-preset off
+   * the button and runs it through clampInput, which only bounds to min/max. So
+   * rewriting the value and the label is the whole fix.
+   *
+   * THE CAPS ARE TABLE RULES AND ARE NOT TOUCHED — Pairs £400, Trilux £200,
+   * Trilux Super £100. £150 is above Super's limit: offering it there would
+   * clamp silently back to £100 and read as a broken button, so Super gets its
+   * own ladder up to its own ceiling.
+   *
+   * The stepper moves in 25s rather than 5s, because at these stakes ±£5 is
+   * eleven taps from £50 to £100.
+   */
+  var SIDE_PRESETS = {
+    pairs: [0, 50, 100, 150],
+    trilux: [0, 50, 100, 150],
+    super: [0, 25, 50, 100],      // table limit is £100
+  };
+  var SIDE_STEP = 25;
+
+  function applySidePresets(root) {
+    try {
+      Object.keys(SIDE_PRESETS).forEach(function (field) {
+        var values = SIDE_PRESETS[field];
+        // Per card, not across all of them: with three boxes there are twelve
+        // buttons for a field and only the first four were being rewritten,
+        // which left boxes 2 and 3 on the old amounts.
+        root.querySelectorAll('.wager-card').forEach(function (card) {
+          var btns = card.querySelectorAll('[data-preset-target="' + field + '"]');
+          // Only rewrite what is there; never add or remove a button, so the row
+          // keeps its four columns whatever the layout does.
+          for (var i = 0; i < btns.length && i < values.length; i++) {
+            btns[i].dataset.preset = String(values[i]);
+            btns[i].textContent = '\u00a3' + values[i];
+          }
+        });
+        root.querySelectorAll('[data-target="' + field + '"][data-step]').forEach(function (b) {
+          var up = Number(b.dataset.step) > 0;
+          b.dataset.step = String(up ? SIDE_STEP : -SIDE_STEP);
+          // The label under each stepper states the step size. Leaving it at
+          // "changes by £5" would make the caption contradict the button.
+          var small = b.closest('.amount-control');
+          small = small && small.querySelector('label small');
+          if (small) {
+            small.textContent = small.textContent.replace(
+              /changes by \u00a3\d+/, 'changes by \u00a3' + SIDE_STEP);
+          }
+        });
+      });
+    } catch (e) { /* the engine's own values still work */ }
+  }
+
+  function installSidePresets() {
+    var run = function () {
+      var host = document.getElementById('wagerCards');
+      if (host) applySidePresets(host);
+    };
+    run();
+    // buildWagerCards() rebuilds the cards from scratch on a box-count change and
+    // after each round, which restores the original buttons. It is called by name
+    // from inside arrow functions, so the lookup happens at call time and
+    // reassigning the global is enough to get the hook.
+    if (typeof window.buildWagerCards === 'function') {
+      var original = window.buildWagerCards;
+      window.buildWagerCards = function () {
+        var r = original.apply(this, arguments);
+        try { run(); } catch (e) { /* never block a rebuild */ }
+        return r;
+      };
+    }
+  }
+
   function boot() {
     scheduleFreshStart();
     loadStakingPanel();
+    installSidePresets();
     injectStyles();
     relocateTopBanners();
     install();
