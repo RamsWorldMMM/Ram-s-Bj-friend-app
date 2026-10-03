@@ -13,7 +13,8 @@
  *     stated plainly rather than left to be inferred
  */
 
-import { rowsForSession } from './export.js';
+import { rowsForSession, roundsOf } from './export.js';
+
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 const pct = (part, whole) => (whole > 0 ? Math.round((part / whole) * 1000) / 10 : null);
@@ -144,8 +145,7 @@ function mistakePatterns(allRows) {
 function shoeRows(sessions) {
   const out = [];
   for (const s of sessions) {
-    let rounds = [];
-    try { rounds = s.round_log_json ? JSON.parse(s.round_log_json) : []; } catch { continue; }
+    const rounds = roundsOf(s);
     if (!rounds.length) continue;
 
     const shoes = new Map();
@@ -282,9 +282,7 @@ const SIDE_LABEL = { pairs: 'Pairs', trilux: 'Trilux', super: 'Trilux Super' };
 function sideBets(sessions) {
   const out = [];
   for (const s of sessions) {
-    let rounds = [];
-    try { rounds = s.round_log_json ? JSON.parse(s.round_log_json) : []; } catch { continue; }
-    if (!Array.isArray(rounds)) rounds = rounds.rounds || [];
+    const rounds = roundsOf(s);
     rounds.slice().sort((a, b) => (a.round || 0) - (b.round || 0)).forEach((r) => {
       (r.boxes || []).forEach((box) => {
         const side = box.side || {};
@@ -319,41 +317,55 @@ function runCurve(bets, stakeOf) {
   return { pl: round2(cum), max_drawdown: round2(dd), worst_point: round2(low) };
 }
 
-/** How often chance alone produces a gap this large. Mulberry32 keeps the
- *  figure reproducible — a p-value that moves every publish invites the reader
- *  to reroll until they like it. */
-function permutationP(bets, trials) {
-  const stakes = bets.map((b) => b.stake);
-  const mults = bets.map((b) => b.mult);
-  const actual = bets.reduce((a, b) => a + (b.mult ? b.stake * b.mult : -b.stake), 0);
-  let seed = 0x9e3779b9;
-  const rnd = () => {
-    seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+/** How often chance alone produces a gap this large.
+ *
+ * This was 2,000 shuffles per product — 52 million multiplications across the
+ * three, 351ms of the Worker's CPU, and the single reason /api/digests began
+ * answering 503 as Ram's history grew. It does not need simulating.
+ *
+ * Pairing stakes with outcomes at random is sampling without replacement, and
+ * the statistic T = sum(stake_i x payoff_pi(i)) has a known mean and variance
+ * under that null:
+ *
+ *   E[T]   = n * mean(a) * mean(b)
+ *   Var[T] = SS(a) * SS(b) / (n - 1)
+ *
+ * where SS is the sum of squared deviations. With thousands of bets per product
+ * the distribution is near enough normal to read a p-value straight off, and it
+ * costs one pass instead of two thousand.
+ *
+ * It is an approximation where the simulation was exact, which matters only if
+ * a result sits near the threshold. The figures it reports are nowhere near it.
+ */
+function normalTwoSided(z) {
+  // Abramowitz & Stegun 7.1.26 for erf; plenty for a p-value quoted to 2dp.
+  const x = Math.abs(z) / Math.SQRT2;
+  const t = 1 / (1 + 0.3275911 * x);
+  const y = 1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t
+    - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+  return Math.max(0, Math.min(1, 1 - y));   // erf(x) = y, so 2*(1-Phi(|z|)) = 1-y
+}
+
+function permutationP(bets) {
+  const n = bets.length;
+  if (n < 2) return { p: null, method: 'too few bets' };
+  const a = bets.map((b) => b.stake);
+  const b = bets.map((x) => (x.mult ? x.mult : -1));   // payoff per pound staked
+  const mean = (v) => v.reduce((x, y) => x + y, 0) / v.length;
+  const ma = mean(a), mb = mean(b);
+  const ss = (v, m) => v.reduce((acc, x) => acc + (x - m) * (x - m), 0);
+  const variance = (ss(a, ma) * ss(b, mb)) / (n - 1);
+  const actual = bets.reduce((acc, x) => acc + (x.mult ? x.stake * x.mult : -x.stake), 0);
+  const expected = n * ma * mb;
+  if (!(variance > 0)) return { p: null, method: 'no variation to test' };
+  const z = (actual - expected) / Math.sqrt(variance);
+  return {
+    p: Math.round(normalTwoSided(z) * 1000) / 1000,
+    z: Math.round(z * 100) / 100,
+    null_mean: round2(expected),
+    null_sd: round2(Math.sqrt(variance)),
+    method: 'exact permutation moments, normal approximation',
   };
-  const sims = new Float64Array(trials);
-  const shuffled = mults.slice();
-  for (let t = 0; t < trials; t += 1) {
-    for (let i = shuffled.length - 1; i > 0; i -= 1) {
-      const j = Math.floor(rnd() * (i + 1));
-      const tmp = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = tmp;
-    }
-    let sum = 0;
-    for (let i = 0; i < stakes.length; i += 1) {
-      sum += shuffled[i] ? stakes[i] * shuffled[i] : -stakes[i];
-    }
-    sims[t] = sum;
-  }
-  let mean = 0;
-  for (let i = 0; i < trials; i += 1) mean += sims[i];
-  mean /= trials;
-  let extreme = 0;
-  for (let i = 0; i < trials; i += 1) {
-    if (Math.abs(sims[i] - mean) >= Math.abs(actual - mean)) extreme += 1;
-  }
-  return { p: Math.round((extreme / trials) * 1000) / 1000, null_mean: round2(mean), trials };
 }
 
 function stakingForProduct(bets, key) {
@@ -422,7 +434,7 @@ function stakingForProduct(bets, key) {
     },
     // Below this a permutation test says nothing useful, and a p-value printed
     // beside three bets reads as authority it has not earned.
-    luck_test: mine.length >= 60 ? permutationP(mine, 2000) : { p: null, trials: 0 },
+    luck_test: mine.length >= 60 ? permutationP(mine) : { p: null, method: 'too few bets' },
     concentration: {
       winning_bets: wins.length,
       biggest_win_share_pct: grossWon > 0 ? pct(winAmounts[0] || 0, grossWon) : null,
@@ -583,5 +595,340 @@ export function buildReportDigest(sessions, meta = {}) {
         : 'Every mistake is listed in full; none were truncated.',
     ],
     sessions: reports,
+  };
+}
+
+/* -------------------------------------------------------------- deviations ---
+ * One record per departure from basic strategy, carrying enough to judge it
+ * without going back to the raw rounds.
+ *
+ * The question that matters is not "was it wrong" — the engine already says
+ * that — but "did it change the shoe". A deviation that consumes the same
+ * number of cards as the correct play leaves every later card where it was, so
+ * its cost is exact arithmetic. One that consumes a different number shifts
+ * every card that follows, and its cost can never be known. Reporting a
+ * counterfactual for the second kind would be inventing a number.
+ */
+
+/** Cards a correct play would have consumed. Hit and Split are unknowable in
+ *  advance — a hit may be one card or five — so they stay null rather than
+ *  being guessed at. */
+function alternativeCardCost(action) {
+  if (action === 'Stand') return 0;
+  if (action === 'Double') return 1;     // double takes exactly one card
+  return null;                           // Hit, Split: not determinable
+}
+
+/** Match a decision to the finished hand it belongs to. Card text carries the
+ *  suit, so a decision's cards are a unique prefix of exactly one final hand —
+ *  which is what makes this reliable across splits, where the hand index
+ *  recorded at decision time no longer matches the final array. */
+function handForDecision(box, dec) {
+  const want = (dec.hand || []).join(' ');
+  const hands = box.hands || [];
+  for (const h of hands) {
+    const cards = (h.cards || []).join(' ');
+    if (cards === want || cards.startsWith(want + ' ')) return h;
+  }
+  return null;
+}
+
+function deviationsForSession(s) {
+  const rounds = roundsOf(s);
+  const out = [];
+
+  rounds.forEach((r) => {
+    (r.boxes || []).forEach((box) => {
+      const decs = box.decisions || [];
+      decs.forEach((d, i) => {
+        if (d.correct !== false) return;
+        const hand = handForDecision(box, d);
+        const before = (d.hand || []).length;
+
+        // What this action actually consumed: the next decision on the SAME
+        // hand shows the cards as they then stood; if there is none, the hand
+        // finished, so the final composition does.
+        let after = hand ? (hand.cards || []).length : null;
+        for (let j = i + 1; j < decs.length; j += 1) {
+          if (handForDecision(box, decs[j]) === hand) { after = (decs[j].hand || []).length; break; }
+        }
+        const consumed = after === null ? null : after - before;
+        const altCost = alternativeCardCost(d.recommended);
+        const flow = (consumed === null || altCost === null)
+          ? 'not determinable'
+          : (consumed === altCost ? 'neutral' : 'changed');
+
+        out.push({
+          session_id: s.id,
+          round: r.round,
+          box: box.number,
+          hand_index: d.handIndex ?? null,
+          shoe: r.shoeNumber ?? null,
+          position_in_shoe: r.shoeRound ?? null,
+          cards_remaining_at_decision: d.cardsRemaining ?? null,
+
+          hand: (d.hand || []).join(' '),
+          dealer_card: d.dealerFirst,
+          chose: d.chosen,
+          correct_play: d.recommended,
+
+          cards_consumed: consumed,
+          correct_play_would_consume: altCost,
+          // The whole point: neutral means the cost is knowable, changed means
+          // it never will be.
+          shoe_effect: flow,
+
+          bankroll_available: d.bankrollAvailable ?? null,
+          hand_bet: d.handBet ?? null,
+          could_double: d.couldDouble ?? null,
+          could_split: d.couldSplit ?? null,
+          // null, not false, when the decision predates context capture. A
+          // deviation that was actually unaffordable would otherwise be
+          // reported as a free choice — which is how R18 was misread.
+          forced_by_bankroll: (function () {
+            const blocked = d.recommended === 'Double' ? d.doubleBlockedByBankroll
+              : d.recommended === 'Split' ? d.splitBlockedByBankroll
+              : false;
+            if (d.recommended !== 'Double' && d.recommended !== 'Split') return false;
+            return typeof blocked === 'boolean' ? blocked : null;
+          }()),
+
+          hand_result: hand ? hand.result : null,
+          hand_net: hand ? round2(hand.net) : null,
+          dealer_total: r.dealerTotal ?? null,
+        });
+      });
+    });
+  });
+  return out;
+}
+
+/** Every deviation, across every session. */
+export function buildDeviationDigest(sessions, meta = {}) {
+  const all = sessions.flatMap(deviationsForSession)
+    .sort((a, b) => String(a.session_id).localeCompare(String(b.session_id)) || a.round - b.round);
+  const forced = all.filter((d) => d.forced_by_bankroll === true).length;
+  const unknownForce = all.filter((d) => d.forced_by_bankroll === null).length;
+  const neutral = all.filter((d) => d.shoe_effect === 'neutral').length;
+  const changed = all.filter((d) => d.shoe_effect === 'changed').length;
+  const noCtx = all.filter((d) => d.bankroll_available === null).length;
+
+  return {
+    what_this_is: 'Every departure from basic strategy, one record each, with '
+      + 'what was possible at the time and whether the choice changed the order '
+      + 'of the cards that followed.',
+    generated_at: meta.generatedAt || null,
+    read_this_first: [
+      'shoe_effect is the field that decides what can be said about cost. '
+        + '"neutral" means the correct play would have used the same number of '
+        + 'cards, so every later card is unchanged and the difference is exact '
+        + 'arithmetic. "changed" means every card after it moved, so the cost is '
+        + 'permanently unknowable — do not estimate one.',
+      'forced_by_bankroll true means the correct play was unaffordable at that '
+        + 'moment. That is not a mistake in judgement and should not be counted '
+        + 'as one.',
+      'Intent — deliberate or accidental — is not recorded anywhere and cannot '
+        + 'be inferred from the action. Only Ram can say.',
+      noCtx
+        ? `${noCtx} of ${all.length} deviations predate the capture of bankroll `
+          + 'and legality, so could_double, could_split and forced_by_bankroll '
+          + 'are null for those. They are not false; they are unknown.'
+        : 'Every deviation carries the bankroll and legality of the moment.',
+    ],
+    totals: {
+      deviations: all.length,
+      forced_by_bankroll: forced,
+      affordability_unknown: unknownForce,
+      shoe_neutral: neutral,
+      shoe_changed: changed,
+      effect_not_determinable: all.length - neutral - changed,
+      without_decision_context: noCtx,
+    },
+    deviations: all,
+  };
+}
+
+/* ------------------------------------------------------------- raw export ---
+ * The chronological record, one file per session.
+ *
+ * Per session rather than one file for everything, for two reasons. A model
+ * reading a 1 MB file skims it and then answers as though it had read all of
+ * it, which is worse than a summary because nothing signals the difference; at
+ * this size it reads the whole session. And a finished session never changes,
+ * so its file is written once and never rewritten — only the session still
+ * being played comes back.
+ */
+
+const RAW_SCHEMA_VERSION = 1;
+
+export function buildSessionRaw(s, meta = {}) {
+  const rounds = roundsOf(s);
+
+  const out = rounds.map((r) => ({
+    round: r.round,
+    shoe: r.shoeNumber ?? null,
+    position_in_shoe: r.shoeRound ?? null,
+    cards_remaining_after: r.cardsRemaining ?? null,
+    shoe_ended: r.shoeEnd ?? null,
+    dealt_at: r.ts ?? null,
+    mode: r.mode ?? null,
+    dealer: {
+      cards: r.dealer || [],
+      total: r.dealerTotal ?? null,
+      soft: r.dealerSoft ?? null,
+      blackjack: r.dealerBlackjack ?? null,
+      drew_extra: r.dealerDrew ?? null,
+    },
+    bankroll_before: round2(r.bankrollBefore),
+    bankroll_after: round2(r.bankrollAfter),
+    round_net: round2(r.net),
+    boxes: (r.boxes || []).map((box) => ({
+      box: box.number,
+      wagers: box.wager,
+      hands: (box.hands || []).map((h, i) => ({
+        hand_index: i,
+        cards: h.cards || [],
+        total: h.total, soft: h.soft, bust: h.bust,
+        bet: round2(h.bet), is_split: !!h.isSplit,
+        result: h.result, net: round2(h.net),
+      })),
+      // In the order they happened. Each entry shows the hand as it stood
+      // BEFORE the action, which is what makes the draws recoverable: the next
+      // entry for the same hand, or the finished hand, shows what arrived.
+      actions: (box.decisions || []).map((d, i) => ({
+        sequence: i + 1,
+        hand_before: d.hand || [],
+        hand_index: d.handIndex ?? null,
+        dealer_card: d.dealerFirst,
+        chose: d.chosen,
+        basic_strategy: d.recommended,
+        followed_strategy: d.correct,
+        cards_remaining: d.cardsRemaining ?? null,
+        bankroll_available: d.bankrollAvailable ?? null,
+        hand_bet: d.handBet ?? null,
+        could_double: d.couldDouble ?? null,
+        could_split: d.couldSplit ?? null,
+      })),
+      side_bets: Object.entries(box.side || {}).map(([product, b]) => ({
+        product,
+        stake: b.stake ?? null,
+        outcome: b.name,
+        multiplier: b.mult ?? null,
+        net: round2(b.net),
+        won: (Number(b.net) || 0) > 0,
+      })),
+      main_net: round2(box.mainNet),
+      side_net: round2(box.sideNet),
+      box_net: round2(box.totalNet),
+    })),
+  }));
+
+  return {
+    schema_version: RAW_SCHEMA_VERSION,
+    what_this_is: 'Every round of one session in the order it was played, with '
+      + 'the cards, the wagers, every action and every side-bet settlement. '
+      + 'Totals across sessions are in summary.json; this file is the record, '
+      + 'not a summary of it.',
+    session_id: s.id,
+    started_at: s.started_at,
+    updated_at: s.updated_at,
+    app_version: s.app_version || null,
+    rules: s.rules_profile || null,
+    generated_at: meta.generatedAt || null,
+    rounds_in_file: out.length,
+    rounds_recorded_by_engine: Number(s.rounds) || 0,
+    read_this_first: [
+      'An action shows the hand BEFORE it. The card it drew is the difference '
+        + 'between it and the next action on the same hand, or the finished hand '
+        + 'where there is no next action.',
+      'Split children are separate hands. Match an action to its hand by the '
+        + 'cards: card text carries the suit, so an action\'s cards are a unique '
+        + 'prefix of exactly one finished hand.',
+      out.length === (Number(s.rounds) || 0)
+        ? 'Every round the engine counted is present in this file.'
+        : `The engine counted ${Number(s.rounds) || 0} rounds and this file holds `
+          + `${out.length}. The difference was dropped by the round-log cap, not lost in play.`,
+    ],
+    rounds: out,
+  };
+}
+
+/** The raw record split by shoe — the unit the game is actually played in, and
+ *  the unit that reads whole. A session file runs to a megabyte; a shoe is
+ *  around 100 KB, and a finished shoe never changes again. */
+export function buildRawShoeFiles(sessions, meta = {}) {
+  const files = [];
+  for (const s of sessions) {
+    const raw = buildSessionRaw(s, meta);
+    if (!raw.rounds.length) continue;
+    const byShoe = new Map();
+    raw.rounds.forEach((r) => {
+      const n = r.shoe ?? 1;
+      if (!byShoe.has(n)) byShoe.set(n, []);
+      byShoe.get(n).push(r);
+    });
+    for (const [shoe, rounds] of byShoe) {
+      const last = rounds[rounds.length - 1];
+      files.push({
+        path: `data/rounds/${String(s.id).slice(0, 8)}-shoe${shoe}.json`,
+        sessionId: s.id,
+        shoe,
+        rounds: rounds.length,
+        startedAt: s.started_at,
+        // A shoe is complete once it has been reshuffled past; only the last
+        // shoe of the newest session can still grow.
+        complete: last.shoe_ended === 'reshuffle',
+        // Built on demand. A publish writes about twenty of these but there are
+        // hundreds; materialising every body up front is what put the Worker
+        // over its memory ceiling.
+        build: () => ({
+          schema_version: raw.schema_version,
+          what_this_is: `One shoe of play, in order. Shoe ${shoe} of session `
+            + `${String(s.id).slice(0, 8)}. Cards, wagers, every action and every `
+            + 'side-bet settlement. Totals live in summary.json.',
+          session_id: s.id,
+          shoe,
+          started_at: s.started_at,
+          app_version: raw.app_version,
+          rules: raw.rules,
+          generated_at: meta.generatedAt || null,
+          rounds_in_shoe: rounds.length,
+          read_this_first: raw.read_this_first.slice(0, 2),
+          rounds,
+        }),
+      });
+    }
+  }
+  // Newest first: when a publish is capped, the useful end gets written.
+  return files.sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt))
+    || b.shoe - a.shoe);
+}
+
+/** What exists, what is published, and what is still queued — so a reader is
+ *  never left guessing whether a gap is missing data or simply not yet written. */
+export function buildRawIndex(files, writtenPaths, meta = {}) {
+  const written = new Set(writtenPaths || []);
+  return {
+    what_this_is: 'Index of the raw per-shoe records under data/rounds/. Open the '
+      + 'file for the shoe you want rather than reading them all.',
+    generated_at: meta.generatedAt || null,
+    read_this_first: [
+      'published false means that shoe has not been written to the repository '
+        + 'YET — publishes are capped so one press cannot fire hundreds of '
+        + 'commits. It fills in on later publishes. It is not missing data.',
+      'A shoe with complete false was still being played when this was written, '
+        + 'so it is a fragment and is not comparable with a finished shoe.',
+    ],
+    shoes_total: files.length,
+    shoes_published: files.filter((f) => written.has(f.path)).length,
+    shoes: files.map((f) => ({
+      file: f.path,
+      session_id: f.sessionId,
+      shoe: f.shoe,
+      rounds: f.rounds,
+      started_at: f.startedAt,
+      complete: f.complete,
+      published: written.has(f.path),
+    })),
   };
 }

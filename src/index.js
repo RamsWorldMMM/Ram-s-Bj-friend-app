@@ -10,7 +10,8 @@ import * as repo from './repo.js';
 import { analyseSession } from './vertex.js';
 import { rowsForSession, toCSV, caveatsFor, COLUMNS } from './export.js';
 import { ensureSchema, schemaReport } from './migrate.js';
-import { buildDigests, buildStakingDigest, buildReportDigest } from './digest.js';
+import { buildDigests, buildStakingDigest, buildReportDigest,
+         buildDeviationDigest } from './digest.js';
 import { publishDigests } from './publish.js';
 
 const json = (data, init = {}) => new Response(JSON.stringify(data), {
@@ -209,6 +210,7 @@ async function route(request, env, ctx, url) {
       ...digests,
       staking: buildStakingDigest(sessions, { generatedAt }),
       reports: buildReportDigest(sessions, { generatedAt }),
+      deviations: buildDeviationDigest(sessions, { generatedAt }),
     });
   }
 

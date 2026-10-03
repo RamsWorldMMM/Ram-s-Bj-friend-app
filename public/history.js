@@ -22,6 +22,76 @@
   var MAX_ROUNDS = 2000;
   var roundLogTruncated = false;
 
+  /* ---------------------------- DECISION CONTEXT ----------------------------
+   * The engine records what was chosen and what was correct, but not what was
+   * POSSIBLE. "Was Double prevented by the bankroll?" cannot be answered after
+   * the fact: by settlement the bankroll has moved on and a split hand has been
+   * replaced by its children.
+   *
+   * recordDecision() is the one moment it is all true at once. It runs once per
+   * decision, before any card is drawn and before any bet is deducted
+   * (index.html: recordDecision is called on the line above the H/S/D/P
+   * branches), so state.bankroll is the money actually available at that choice
+   * and hand.bet is the stake it would have to match.
+   *
+   * The legality tests below are the engine's own, not a paraphrase: canSplit()
+   * is called directly, and the Double condition is the same expression the
+   * engine evaluates before it will double.
+   *
+   * Reads only. The original is called with the same arguments and its result
+   * returned unchanged, so gameplay, card generation, settlement and button
+   * positioning are untouched.
+   * ------------------------------------------------------------------------ */
+  var decisionCtx = {};          // round -> box -> [ctx, ...] in decision order
+
+  function captureDecisionContext(action, correct, box, hand) {
+    try {
+      var r = state.rounds, b = box.number;
+      if (!decisionCtx[r]) decisionCtx[r] = {};
+      if (!decisionCtx[r][b]) decisionCtx[r][b] = [];
+
+      var bank = Number(state.bankroll) || 0;
+      var bet = Number(hand.bet) || 0;
+      var twoCards = hand.cards.length === 2;
+      // index.html: canSplit(hand, true) — pair, two cards, and bankroll >= bet
+      var splitOk = (typeof canSplit === 'function') ? canSplit(hand, true) : null;
+      // index.html: hand.cards.length===2 && !hand.splitAces && state.bankroll>=hand.bet
+      var doubleOk = twoCards && !hand.splitAces && bank >= bet;
+
+      decisionCtx[r][b].push({
+        hand_index: box.hands.indexOf(hand),
+        bankroll_available: bank,
+        hand_bet: bet,
+        // What the player could legally have done at this point.
+        could_hit: !hand.splitAces || !twoCards,
+        could_stand: !hand.splitAces || !twoCards,
+        could_double: doubleOk,
+        could_split: splitOk,
+        // Separates "chose not to" from "could not afford to", which is the
+        // whole point of recording this.
+        double_blocked_by_bankroll: twoCards && !hand.splitAces && bank < bet,
+        split_blocked_by_bankroll:
+          twoCards && hand.cards.length === 2
+          && hand.cards[0].r === hand.cards[1].r && bank < bet,
+      });
+
+      // Two rounds is all that is ever needed to match a snapshot; anything
+      // older would just grow without end over a 2000-round session.
+      Object.keys(decisionCtx).forEach(function (k) {
+        if (Number(k) < r - 1) delete decisionCtx[k];
+      });
+    } catch (e) { /* never let bookkeeping touch the game */ }
+  }
+
+  function installDecisionCapture() {
+    if (typeof window.recordDecision !== 'function') return;
+    var original = window.recordDecision;
+    window.recordDecision = function (action, correct, box, hand, beforeCards) {
+      try { captureDecisionContext(action, correct, box, hand); } catch (e) { /* ignore */ }
+      return original.apply(this, arguments);
+    };
+  }
+
   /* ------------------------------- SHOE INDEX -------------------------------
    * state.shoeNumber is assigned once in createInitialState() and never
    * incremented — makeShoe() does not touch it — so every round in every session
@@ -204,10 +274,24 @@
           sideNet: box.sideNet,
           totalNet: box.totalNet,
           decisions: decisions.filter(function (d) { return d.box === box.number; })
-            .map(function (d) {
+            .map(function (d, di) {
+              // Both lists are appended once per recordDecision call, in the
+              // same order, so position matches exactly.
+              var ctx = (decisionCtx[state.rounds] || {})[box.number] || [];
+              var c = ctx[di] || {};
               return {
                 hand: d.hand, chosen: d.chosen, recommended: d.recommended,
                 correct: d.correct, dealerFirst: d.dealerFirst,
+                // The engine already stamps shoe position on every decision;
+                // it was simply not being carried through.
+                cardsRemaining: d.cardsRemaining,
+                handIndex: c.hand_index,
+                bankrollAvailable: c.bankroll_available,
+                handBet: c.hand_bet,
+                couldDouble: c.could_double,
+                couldSplit: c.could_split,
+                doubleBlockedByBankroll: c.double_blocked_by_bankroll,
+                splitBlockedByBankroll: c.split_blocked_by_bankroll,
               };
             }),
         };
@@ -652,6 +736,7 @@
     injectStyles();
     injectUI();
     installHooks();
+    installDecisionCapture();
     render();
     renderPrevHand();
     showLastStoredIfEmpty();

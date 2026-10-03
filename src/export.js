@@ -34,12 +34,50 @@ export const COLUMNS = [
   'round_net', 'bankroll_before', 'bankroll_after',
 ];
 
-/** Flattens one stored session into export rows. */
-export function rowsForSession(session) {
+
+/* Parse each session's round log ONCE, and share it.
+ *
+ * Five separate passes called JSON.parse on the same blob — this exporter plus
+ * shoes, staking, deviations and the raw export. Across 26 sessions that is
+ * 7 MB of JSON parsed five times, and a parsed object graph runs several times
+ * the size of its source: enough to take the Worker past its memory ceiling and
+ * answer 503 instead of a digest.
+ *
+ * It lives here rather than in digest.js because digest.js already imports from
+ * this file; the other direction would make the two modules circular.
+ */
+/* ONE session parsed at a time, deliberately.
+ *
+ * A cache holding every session would turn five parses into one, but it would
+ * also keep all 26 parsed logs alive at once: 7 MB of JSON becomes a far larger
+ * object graph, and the Worker has 128 MB. That is what made /api/digests
+ * answer 503 once Ram's history passed a few thousand rounds — including one
+ * session of 2,763 rounds whose log alone is 2.8 MB.
+ *
+ * Holding only the last one keeps peak memory at a single session while still
+ * removing the repeat parse within a pass, which is where it actually repeated.
+ */
+let lastKey = null;
+let lastRounds = null;
+export function roundsOf(session) {
+  if (!session || typeof session !== 'object') return [];
+  const key = session.id;
+  if (key && key === lastKey) return lastRounds;
   let rounds = [];
   try {
-    rounds = session.round_log_json ? JSON.parse(session.round_log_json) : [];
+    const parsed = session.round_log_json ? JSON.parse(session.round_log_json) : [];
+    rounds = Array.isArray(parsed) ? parsed : (parsed.rounds || []);
   } catch { rounds = []; }
+  lastKey = key;
+  lastRounds = rounds;
+  return rounds;
+}
+
+/** Flattens one stored session into export rows. */
+export function rowsForSession(session) {
+  // Shares digest.js's per-session cache: the same blob was being parsed here
+  // and four more times elsewhere on every publish.
+  const rounds = roundsOf(session);
 
   const rows = [];
   for (const r of rounds) {

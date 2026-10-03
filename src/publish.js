@@ -9,7 +9,10 @@
  * conflict, which is what keeps two publishes from silently clobbering.
  */
 
-import { buildDigests, buildStakingDigest, buildReportDigest } from './digest.js';
+import {
+  buildDigests, buildStakingDigest, buildReportDigest,
+  buildDeviationDigest, buildRawShoeFiles, buildRawIndex,
+} from './digest.js';
 import * as repo from './repo.js';
 
 const API = 'https://api.github.com';
@@ -36,17 +39,46 @@ function headers(token) {
   };
 }
 
-/** Current sha for a path, or null when the file does not exist yet. */
-async function currentSha(token, owner, name, path, branch) {
+/** Current sha and decoded content for a path, or nulls when it does not exist.
+ *  The content is what lets an unchanged file be skipped. */
+async function currentFile(token, owner, name, path, branch) {
   const url = `${API}/repos/${owner}/${name}/contents/${encodeURI(path)}?ref=${encodeURIComponent(branch)}`;
   const res = await fetch(url, { headers: headers(token) });
-  if (res.status === 404) return null;
+  if (res.status === 404) return { sha: null, text: null };
   if (!res.ok) throw new Error(`GitHub read failed for ${path}: ${res.status} ${await res.text()}`);
-  return (await res.json()).sha;
+  const body = await res.json();
+  let text = null;
+  try {
+    if (body.content && body.encoding === 'base64') {
+      const bin = atob(body.content.replace(/\n/g, ''));
+      const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+      text = new TextDecoder().decode(bytes);
+    }
+  } catch { text = null; }
+  return { sha: body.sha || null, text };
+}
+
+/* Every file carries generated_at, stamped fresh on each publish, so nothing is
+ * ever byte-identical and "skip the unchanged" could never fire. Comparing with
+ * that field removed is what makes it work: press the button twice having played
+ * nothing and the second press writes no commits at all. */
+function sameIgnoringTimestamp(a, b) {
+  if (a === null || b === null) return false;
+  try {
+    const strip = (t) => {
+      const o = JSON.parse(t);
+      delete o.generated_at;
+      return JSON.stringify(o);
+    };
+    return strip(a) === strip(b);
+  } catch { return false; }
 }
 
 async function putFile(token, owner, name, path, branch, text, message) {
-  const sha = await currentSha(token, owner, name, path, branch);
+  const { sha, text: existing } = await currentFile(token, owner, name, path, branch);
+  if (sameIgnoringTimestamp(existing, text)) {
+    return { path, bytes: text.length, skipped: true };
+  }
   const res = await fetch(`${API}/repos/${owner}/${name}/contents/${encodeURI(path)}`, {
     method: 'PUT',
     headers: { ...headers(token), 'Content-Type': 'application/json' },
@@ -86,6 +118,7 @@ export async function publishDigests(env, userId, opts = {}) {
     // The report Ram was copying out by hand and pasting in. Published, so the
     // button carries everything the paste did and he no longer has to do both.
     ['data/reports.json', buildReportDigest(sessions, { generatedAt })],
+    ['data/deviations.json', buildDeviationDigest(sessions, { generatedAt })],
   ];
 
   const rounds = digests.summary.lifetime.rounds;
@@ -97,7 +130,51 @@ export async function publishDigests(env, userId, opts = {}) {
       JSON.stringify(obj, null, 1) + '\n', message));
   }
 
+  /* The raw record, split by shoe. Capped per publish because the contents API
+   * makes one commit per file, and 233 of them in a single press would be both
+   * slow and a secondary-rate-limit risk. Newest first, so the useful end is
+   * written first; already-published shoes are skipped unchanged, so each press
+   * advances the backlog until it is empty. The index says what is still queued
+   * rather than letting a gap look like missing data. */
+  /* Two ceilings, both real.
+   *
+   * The contents API makes one commit per file, so hundreds in a press would be
+   * slow and risk a secondary rate limit. And this Worker is on Cloudflare's
+   * free plan, which allows 50 subrequests per request: every file costs a GET
+   * to read what is there, and a PUT only if it differs. Six digests and the
+   * index already account for fourteen, so the shoe loop gets what is left and
+   * counts both kinds.
+   */
+  const MAX_SHOE_WRITES = 12;
+  const MAX_SHOE_REQUESTS = 30;
+  const shoeFiles = buildRawShoeFiles(sessions, { generatedAt });
+  const rawWritten = [];
+  let writes = MAX_SHOE_WRITES;
+  let calls = MAX_SHOE_REQUESTS;
+  for (const f of shoeFiles) {
+    if (writes <= 0 || calls <= 0) break;
+    const res = await putFile(token, owner, name, f.path, branch,
+      JSON.stringify(f.build(), null, 1) + '\n', message);
+    rawWritten.push(res);
+    calls -= res.skipped ? 1 : 2;           // a skip costs the read only
+    if (!res.skipped) writes -= 1;
+  }
+  const publishedPaths = shoeFiles
+    .filter((f) => rawWritten.some((w) => w.path === f.path))
+    .map((f) => f.path);
+  written.push(await putFile(token, owner, name, 'data/rounds/index.json', branch,
+    JSON.stringify(buildRawIndex(shoeFiles, publishedPaths, { generatedAt }), null, 1) + '\n',
+    message));
+
+  const rawNew = rawWritten.filter((r) => !r.skipped).length;
+
   return {
+    rawShoes: {
+      total: shoeFiles.length,
+      writtenThisTime: rawNew,
+      alreadyCurrent: rawWritten.length - rawNew,
+      remaining: Math.max(0, shoeFiles.length - publishedPaths.length),
+    },
     ok: true,
     publishedAt: generatedAt,
     branch,
