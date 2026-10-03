@@ -10,12 +10,29 @@ open the one that answers the question rather than the biggest one available.
 | `mistakes.json` | situation | Which mistakes actually repeat |
 | `staking.json` | side-bet product | Whether varying the side-bet stakes helped |
 | `reports.json` | session | One session in detail — hands, actions, boxes, streaks, every mistake |
+| `deviations.json` | strategy departure | Every deviation, what was possible, and whether it changed the shoe |
+| `rounds/index.json` | shoe | What raw shoe files exist and which are published |
+| `rounds/<session>-shoe<n>.json` | round | The raw record of one shoe, in order |
 
 `reports.json` is the session report that used to be copied out of the app and
 pasted in by hand. It holds what only makes sense inside one session: the mix
 of hands dealt and actions chosen, how each box did, the longest runs, and
 every mistake written out separately. For totals across all sessions read
 `summary.json`; this file deliberately does not aggregate.
+
+`deviations.json` is the one to read about mistakes. For each departure from
+basic strategy it records what was possible at that moment — the bankroll, and
+whether Double or Split were affordable — and whether the choice changed the
+order of the cards that followed. `shoe_effect` decides what can be said about
+cost: `neutral` means the correct play would have used the same number of
+cards, so the difference is exact arithmetic; `changed` means every later card
+moved and the cost is permanently unknowable. Do not estimate one.
+
+`rounds/` holds the raw chronological record, split one file per shoe — around
+100 KB each, which reads whole. Start at `rounds/index.json` and open the shoe
+you want. A shoe marked `published: false` has not been written yet, because
+publishes are capped so one press cannot fire hundreds of commits; it is not
+missing data.
 
 `staking.json` answers one question: did varying the Pairs, Trilux and Trilux
 Super stakes improve profit or reduce drawdown, against the same cards played
