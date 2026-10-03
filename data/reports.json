@@ -1,6 +1,6 @@
 {
  "what_this_is": "The per-session report, one entry per session — the detail that only means anything inside a single session. Money is pounds. For totals across every session read summary.json instead; this file deliberately does not aggregate.",
- "generated_at": "2026-10-01T04:09:05.247Z",
+ "generated_at": "2026-10-03T07:48:42.105Z",
  "read_this_first": [
   "decision_mix is what he was dealt and what he chose, not what was correct. Two sessions at the same accuracy can be entirely different hands, and comparing accuracy without it hides that.",
   "mistakes_detail lists each mistake separately, unlike mistakes.json which groups them into repeating patterns. Use this to see a single session, that one to see a habit.",
@@ -1454,58 +1454,58 @@
   {
    "session_id": "2528b3cc-1a1e-492d-bbb3-11b7d8c638c1",
    "started_at": "2026-10-01 04:04:51",
-   "rounds": 23,
-   "decisions": 83,
-   "correct": 81,
-   "mistakes": 2,
-   "accuracy_pct": 97.6,
+   "rounds": 455,
+   "decisions": 1369,
+   "correct": 1365,
+   "mistakes": 4,
+   "accuracy_pct": 99.7,
    "decision_mix": {
-    "hard_hands": 72,
-    "soft_hands": 7,
-    "pairs": 4,
-    "hit": 39,
-    "stand": 38,
-    "double": 4,
-    "split": 2
+    "hard_hands": 1165,
+    "soft_hands": 134,
+    "pairs": 70,
+    "hit": 612,
+    "stand": 651,
+    "double": 82,
+    "split": 24
    },
    "box_performance": [
     {
      "box": 1,
-     "decisions": 31,
-     "correct": 30,
-     "accuracy_pct": 96.8,
-     "main_pl": -2875
+     "decisions": 635,
+     "correct": 634,
+     "accuracy_pct": 99.8,
+     "main_pl": 3875
     },
     {
      "box": 2,
-     "decisions": 33,
-     "correct": 33,
-     "accuracy_pct": 100,
-     "main_pl": -525
+     "decisions": 638,
+     "correct": 637,
+     "accuracy_pct": 99.8,
+     "main_pl": 4825
     },
     {
      "box": 3,
-     "decisions": 19,
-     "correct": 18,
-     "accuracy_pct": 94.7,
-     "main_pl": -1750
+     "decisions": 96,
+     "correct": 94,
+     "accuracy_pct": 97.9,
+     "main_pl": -4950
     }
    ],
    "streaks": {
     "longest_winning_rounds": 5,
-    "longest_losing_rounds": 4
+    "longest_losing_rounds": 8
    },
-   "largest_main_wager": 500,
+   "largest_main_wager": 1050,
    "bankroll": {
     "start": 12000,
-    "end": 14115,
-    "highest": 14525,
+    "end": 15720,
+    "highest": 25335,
     "lowest": 330,
-    "range": 14195,
-    "max_drawdown": 12185
+    "range": 25005,
+    "max_drawdown": 19030
    },
-   "side_bet_share_of_stakes_pct": 22.6,
-   "mistakes_listed": 2,
+   "side_bet_share_of_stakes_pct": 19.5,
+   "mistakes_listed": 4,
    "mistakes_detail": [
     {
      "round": 18,
@@ -1524,8 +1524,233 @@
      "dealer_card": "6♦",
      "chose": "Hit",
      "correct_play": "Double"
+    },
+    {
+     "round": 114,
+     "box": 3,
+     "hand": "2♠ 5♣ A♣",
+     "hand_value": "Soft 18",
+     "dealer_card": "8♠",
+     "chose": "Hit",
+     "correct_play": "Stand"
+    },
+    {
+     "round": 452,
+     "box": 2,
+     "hand": "8♠ 2♠",
+     "hand_value": "Hard 10",
+     "dealer_card": "9♦",
+     "chose": "Hit",
+     "correct_play": "Double"
     }
    ]
+  },
+  {
+   "session_id": "77cfd974-4d70-49bd-a2dc-2ed66dda3f91",
+   "started_at": "2026-10-02 19:56:21",
+   "rounds": 34,
+   "decisions": 92,
+   "correct": 92,
+   "mistakes": 0,
+   "accuracy_pct": 100,
+   "decision_mix": {
+    "hard_hands": 80,
+    "soft_hands": 6,
+    "pairs": 6,
+    "hit": 48,
+    "stand": 41,
+    "double": 3,
+    "split": 0
+   },
+   "box_performance": [
+    {
+     "box": 1,
+     "decisions": 45,
+     "correct": 45,
+     "accuracy_pct": 100,
+     "main_pl": -3350
+    },
+    {
+     "box": 2,
+     "decisions": 47,
+     "correct": 47,
+     "accuracy_pct": 100,
+     "main_pl": -2300
+    }
+   ],
+   "streaks": {
+    "longest_winning_rounds": 3,
+    "longest_losing_rounds": 6
+   },
+   "largest_main_wager": 1000,
+   "bankroll": {
+    "start": 10000,
+    "end": 1075,
+    "highest": 11200,
+    "lowest": 1075,
+    "range": 10125,
+    "max_drawdown": 10125
+   },
+   "side_bet_share_of_stakes_pct": 20.6,
+   "mistakes_listed": 0,
+   "mistakes_detail": []
+  },
+  {
+   "session_id": "ddc5cc7d-b51e-466e-9064-e9f9cc96c246",
+   "started_at": "2026-10-03 04:44:50",
+   "rounds": 28,
+   "decisions": 68,
+   "correct": 68,
+   "mistakes": 0,
+   "accuracy_pct": 100,
+   "decision_mix": {
+    "hard_hands": 59,
+    "soft_hands": 3,
+    "pairs": 6,
+    "hit": 23,
+    "stand": 37,
+    "double": 7,
+    "split": 1
+   },
+   "box_performance": [
+    {
+     "box": 1,
+     "decisions": 36,
+     "correct": 36,
+     "accuracy_pct": 100,
+     "main_pl": -1200
+    },
+    {
+     "box": 2,
+     "decisions": 32,
+     "correct": 32,
+     "accuracy_pct": 100,
+     "main_pl": -150
+    }
+   ],
+   "streaks": {
+    "longest_winning_rounds": 2,
+    "longest_losing_rounds": 3
+   },
+   "largest_main_wager": 850,
+   "bankroll": {
+    "start": 10000,
+    "end": 6565,
+    "highest": 12535,
+    "lowest": 6285,
+    "range": 6250,
+    "max_drawdown": 6250
+   },
+   "side_bet_share_of_stakes_pct": 20.7,
+   "mistakes_listed": 0,
+   "mistakes_detail": []
+  },
+  {
+   "session_id": "d5219f59-f592-46c9-aedd-a064357bb19c",
+   "started_at": "2026-10-03 04:49:38",
+   "rounds": 25,
+   "decisions": 75,
+   "correct": 75,
+   "mistakes": 0,
+   "accuracy_pct": 100,
+   "decision_mix": {
+    "hard_hands": 66,
+    "soft_hands": 7,
+    "pairs": 2,
+    "hit": 43,
+    "stand": 30,
+    "double": 2,
+    "split": 0
+   },
+   "box_performance": [
+    {
+     "box": 1,
+     "decisions": 38,
+     "correct": 38,
+     "accuracy_pct": 100,
+     "main_pl": -125
+    },
+    {
+     "box": 2,
+     "decisions": 30,
+     "correct": 30,
+     "accuracy_pct": 100,
+     "main_pl": -100
+    },
+    {
+     "box": 3,
+     "decisions": 7,
+     "correct": 7,
+     "accuracy_pct": 100,
+     "main_pl": -700
+    }
+   ],
+   "streaks": {
+    "longest_winning_rounds": 5,
+    "longest_losing_rounds": 6
+   },
+   "largest_main_wager": 850,
+   "bankroll": {
+    "start": 10000,
+    "end": 6910,
+    "highest": 12805,
+    "lowest": 4975,
+    "range": 7830,
+    "max_drawdown": 7830
+   },
+   "side_bet_share_of_stakes_pct": 19.2,
+   "mistakes_listed": 0,
+   "mistakes_detail": []
+  },
+  {
+   "session_id": "ff49fbe5-fc11-4f7b-bba1-d3aac9c598c1",
+   "started_at": "2026-10-03 04:53:57",
+   "rounds": 78,
+   "decisions": 221,
+   "correct": 221,
+   "mistakes": 0,
+   "accuracy_pct": 100,
+   "decision_mix": {
+    "hard_hands": 184,
+    "soft_hands": 25,
+    "pairs": 12,
+    "hit": 89,
+    "stand": 110,
+    "double": 15,
+    "split": 7
+   },
+   "box_performance": [
+    {
+     "box": 1,
+     "decisions": 113,
+     "correct": 113,
+     "accuracy_pct": 100,
+     "main_pl": 50
+    },
+    {
+     "box": 2,
+     "decisions": 108,
+     "correct": 108,
+     "accuracy_pct": 100,
+     "main_pl": 3800
+    }
+   ],
+   "streaks": {
+    "longest_winning_rounds": 5,
+    "longest_losing_rounds": 5
+   },
+   "largest_main_wager": 1050,
+   "bankroll": {
+    "start": 10000,
+    "end": 18250,
+    "highest": 20460,
+    "lowest": 3720,
+    "range": 16740,
+    "max_drawdown": 9930
+   },
+   "side_bet_share_of_stakes_pct": 18.8,
+   "mistakes_listed": 0,
+   "mistakes_detail": []
   }
  ]
 }
