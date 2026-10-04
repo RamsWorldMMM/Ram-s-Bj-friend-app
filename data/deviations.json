@@ -1,20 +1,20 @@
 {
  "what_this_is": "Every departure from basic strategy, one record each, with what was possible at the time and whether the choice changed the order of the cards that followed.",
- "generated_at": "2026-10-03T20:19:37.923Z",
+ "generated_at": "2026-10-04T07:01:24.269Z",
  "read_this_first": [
   "shoe_effect is the field that decides what can be said about cost. \"neutral\" means the correct play would have used the same number of cards, so every later card is unchanged and the difference is exact arithmetic. \"changed\" means every card after it moved, so the cost is permanently unknowable — do not estimate one.",
   "forced_by_bankroll true means the correct play was unaffordable at that moment. That is not a mistake in judgement and should not be counted as one.",
   "Intent — deliberate or accidental — is not recorded anywhere and cannot be inferred from the action. Only Ram can say.",
-  "42 of 42 deviations predate the capture of bankroll and legality, so could_double, could_split and forced_by_bankroll are null for those. They are not false; they are unknown."
+  "44 of 44 deviations predate the capture of bankroll and legality, so could_double, could_split and forced_by_bankroll are null for those. They are not false; they are unknown."
  ],
  "totals": {
-  "deviations": 42,
+  "deviations": 44,
   "forced_by_bankroll": 0,
-  "affordability_unknown": 12,
-  "shoe_neutral": 8,
+  "affordability_unknown": 14,
+  "shoe_neutral": 10,
   "shoe_changed": 15,
   "effect_not_determinable": 19,
-  "without_decision_context": 42
+  "without_decision_context": 44
  },
  "deviations": [
   {
@@ -519,6 +519,54 @@
    "forced_by_bankroll": false,
    "hand_result": "Lost — player bust",
    "hand_net": -500,
+   "dealer_total": 18
+  },
+  {
+   "session_id": "4d8d64c6-1093-406d-8f91-e440f0769e10",
+   "round": 144,
+   "box": 3,
+   "hand_index": null,
+   "shoe": 3,
+   "position_in_shoe": 19,
+   "cards_remaining_at_decision": null,
+   "hand": "8♠ 3♣",
+   "dealer_card": "9♥",
+   "chose": "Hit",
+   "correct_play": "Double",
+   "cards_consumed": 1,
+   "correct_play_would_consume": 1,
+   "shoe_effect": "neutral",
+   "bankroll_available": null,
+   "hand_bet": null,
+   "could_double": null,
+   "could_split": null,
+   "forced_by_bankroll": null,
+   "hand_result": "Push",
+   "hand_net": 0,
+   "dealer_total": 21
+  },
+  {
+   "session_id": "4d8d64c6-1093-406d-8f91-e440f0769e10",
+   "round": 179,
+   "box": 2,
+   "hand_index": null,
+   "shoe": 5,
+   "position_in_shoe": 4,
+   "cards_remaining_at_decision": null,
+   "hand": "4♦ 6♠",
+   "dealer_card": "9♠",
+   "chose": "Hit",
+   "correct_play": "Double",
+   "cards_consumed": 1,
+   "correct_play_would_consume": 1,
+   "shoe_effect": "neutral",
+   "bankroll_available": null,
+   "hand_bet": null,
+   "could_double": null,
+   "could_split": null,
+   "forced_by_bankroll": null,
+   "hand_result": "Lost",
+   "hand_net": -350,
    "dealer_total": 18
   },
   {
