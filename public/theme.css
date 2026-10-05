@@ -968,3 +968,64 @@ body.playing-mode .app-header .status-strip.session-summary { display: grid; }
   body.playing-mode .app-header { padding: 7px 12px; }
   body.playing-mode .app-header h1 { font-size: .92rem; letter-spacing: .07em; }
 }
+
+/* ------------------------------------------------- the hand line, readable */
+/* "Hard 8 · Main £50 · In play" sat at .74rem in muted grey inside a white
+   card. It holds the three things that matter while a hand is live — what the
+   cards make, what is riding on them, whether it is still in play — and at the
+   speed the game is dealt it simply vanished.
+
+   So: a band rather than a caption. Filled, bordered, bigger, bold, and
+   coloured by state so "In play" and "Bust" are different at a glance rather
+   than different at a read. The engine still writes exactly the same words. */
+
+.hand-card .hand-meta {
+  margin-top: 6px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  font-size: .9rem;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: -.005em;
+  /* The money sits between two words that change length, so stop the digits
+     shuffling the line about as the wager changes. */
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  background: var(--panel-sunk);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+/* Live — the state he is reading mid-hand, so it carries the table's own green
+   and the most contrast of the three. */
+.hand-card .hand-meta.is-live {
+  background: var(--green-soft);
+  border-color: rgba(10, 82, 54, .22);
+  color: var(--green2);
+}
+
+/* Finished and fine: present, quiet, clearly not asking for a decision. */
+.hand-card .hand-meta.is-done {
+  background: var(--panel-sunk);
+  border-color: var(--border-strong);
+  color: var(--muted);
+}
+
+/* Bust reads before it is read. */
+.hand-card .hand-meta.is-bust {
+  background: var(--danger-soft);
+  border-color: #E4C2C2;
+  color: var(--danger);
+}
+
+/* The active hand is the one being played; lift its line a little further. */
+.hand-card.active-hand .hand-meta.is-live {
+  border-color: rgba(10, 82, 54, .38);
+  box-shadow: 0 1px 0 rgba(10, 82, 54, .06);
+}
+
+/* Phone: the engine drops this to .74rem, which is the whole problem. Hold it
+   at a readable size — the band has the room. */
+@media (max-width: 560px) {
+  .hand-card .hand-meta { font-size: .86rem; padding: 7px 9px; }
+}
