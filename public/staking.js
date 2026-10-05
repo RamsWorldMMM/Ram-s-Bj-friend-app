@@ -606,7 +606,11 @@
       .catch(function (err) {
         // Never silent. A publish that stopped working while the record looked
         // complete is the failure that matters here.
-        say('Could not send: ' + (err && err.message ? err.message : 'unknown')
+        // Server messages already end in a full stop; appending another gave
+        // "...that account's record.. Your play is safe".
+        var why = String(err && err.message ? err.message : 'unknown')
+          .replace(/\.\s*$/, '');
+        say('Could not send: ' + why
           + '. Your play is safe — use Send now when you are ready.', 'bad');
       });
   }
