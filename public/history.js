@@ -333,6 +333,10 @@
     try {
       localStorage.setItem(LOG_KEY, JSON.stringify({
         sessionId: currentSessionId, rounds: roundLog,
+        // The flag lived only in memory, so any reload reset it to false over
+        // a log that WAS truncated: one session reported truncated:false
+        // while 763 rounds were missing from it.
+        truncated: roundLogTruncated,
       }));
     } catch (e) { /* quota — the server copy is authoritative */ }
   }
@@ -343,6 +347,7 @@
       if (raw && Array.isArray(raw.rounds)) {
         roundLog = raw.rounds;
         currentSessionId = raw.sessionId || null;
+        if (raw.truncated) roundLogTruncated = true;
       }
     } catch (e) { roundLog = []; }
   }
@@ -747,7 +752,13 @@
       // firstRound/lastRound make a coverage gap visible. They differ from
       // 1..captured whenever rounds were dropped by the cap, or when capture
       // began part-way through a session (e.g. a build shipped mid-session).
-      return { truncated: roundLogTruncated, maxRounds: MAX_ROUNDS,
+      // Derived, not merely remembered: a first round above 1 means earlier
+      // rounds were dropped, and that is a fact about the data which no
+      // reload can lose. The flag alone could not survive one.
+      var firstKept = roundLog.length ? roundLog[0].round : null;
+      var dropped = roundLogTruncated
+        || (typeof firstKept === 'number' && firstKept > 1);
+      return { truncated: dropped, maxRounds: MAX_ROUNDS,
                shoesSeen: shoeIndex, captured: roundLog.length,
                firstRound: roundLog.length ? roundLog[0].round : null,
                lastRound: roundLog.length ? roundLog[roundLog.length - 1].round : null };
