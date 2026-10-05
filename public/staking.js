@@ -524,3 +524,157 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
   else mount();
 })();
+
+/* Ram's BJ Friend — AUTO-PUBLISH ON SHOE END
+ *
+ * "when game end it is showing next round and all, so keep some status for you,
+ *  when it becomes true you should send the data and show data is pushed"
+ *
+ * WHY THE SHOE, AND NOT A TIMER OR A SCHEDULE
+ * A round is far too often — 6,300 of them would be 6,300 publishes. A cron
+ * cannot do it at all: a scheduled Worker on Cloudflare's free plan gets 10ms of
+ * CPU and this publish needs 225ms, so it would fail every time it fired. The
+ * shoe is the natural end of a game, it arrives every 25 rounds or so, and the
+ * engine already announces it — markShoeEnded() sets state.shoeEnded and raises
+ * the banner.
+ *
+ * It also runs in the ordinary request path, which means there IS a signed-in
+ * user: the server's "only Ram may publish" rule applies unchanged, and no
+ * second authorisation path has to be invented for a machine.
+ *
+ * OFF BY DEFAULT, DELIBERATELY
+ * Publishing writes to a repository that is PUBLIC at the time of writing, and
+ * pressing the button is currently the one moment anyone decides to do that.
+ * Automating it removes that moment. So the switch below starts off and the app
+ * asks once, in plain words, before it is ever turned on — and the answer is
+ * remembered per device.
+ */
+(function () {
+  'use strict';
+
+  var PREF = 'bjfAutoPublish';          // 'on' | 'off' | absent (never asked)
+  var lastPublishedShoe = null;         // one publish per shoe, not per render
+
+  function pref() {
+    try { return localStorage.getItem(PREF); } catch (e) { return null; }
+  }
+  function setPref(v) {
+    try { localStorage.setItem(PREF, v); } catch (e) { /* private mode */ }
+  }
+
+  /* reveal.js raises a full-screen shoe alert over the page when a shoe ends,
+     and it covers #shoeBanner completely. Anything attached to the banner is
+     visible in the DOM and untouchable on the screen — the consent buttons
+     could not be tapped at all. So attach to the alert's card when it is up,
+     and fall back to the banner when it is not. */
+  function noticeHost() {
+    var alert = document.getElementById('bjfShoeAlert');
+    if (alert && alert.classList.contains('show')) {
+      return alert.querySelector('.sa-card') || alert;
+    }
+    return document.getElementById('shoeBanner');
+  }
+
+  function say(text, tone) {
+    var host = noticeHost();
+    if (!host) return;
+    var line = document.getElementById('bjfPushNote');
+    if (!line) {
+      line = document.createElement('p');
+      line.id = 'bjfPushNote';
+      line.style.cssText = 'margin:8px 0 0;font-size:.8rem;font-weight:700';
+      host.appendChild(line);
+    }
+    line.textContent = text;
+    line.style.color = tone === 'bad' ? 'var(--danger,#A32222)'
+      : tone === 'good' ? 'var(--green,#0A5236)' : 'var(--muted,#5F6F67)';
+  }
+
+  function publishNow(shoeNo) {
+    say('Sending your play…');
+    fetch('/api/publish', { method: 'POST', credentials: 'same-origin' })
+      .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b }; }); })
+      .then(function (res) {
+        if (!res.ok) throw new Error((res.b && res.b.error) || 'failed');
+        lastPublishedShoe = shoeNo;
+        var b = res.b;
+        var when = new Date(b.publishedAt);
+        say('Data sent ✓  ' + when.toLocaleTimeString()
+          + ' · ' + b.rounds + ' rounds from ' + b.sessions
+          + ' session' + (b.sessions === 1 ? '' : 's'), 'good');
+      })
+      .catch(function (err) {
+        // Never silent. A publish that stopped working while the record looked
+        // complete is the failure that matters here.
+        say('Could not send: ' + (err && err.message ? err.message : 'unknown')
+          + '. Your play is safe — use Send now when you are ready.', 'bad');
+      });
+  }
+
+  /* Asked once, in his words, and only at a real shoe end — not on a first load
+     where it would be a dialogue about nothing. */
+  function askThenMaybePublish(shoeNo) {
+    var answer = pref();
+    if (answer === 'off') return;
+    if (answer === 'on') { publishNow(shoeNo); return; }
+
+    var host = noticeHost();
+    if (!host || document.getElementById('bjfAutoAsk')) return;
+    var box = document.createElement('div');
+    box.id = 'bjfAutoAsk';
+    box.style.cssText = 'margin-top:10px;padding:11px;border:1px solid var(--border);'
+      + 'border-radius:12px;text-align:left;font-size:.82rem;line-height:1.5';
+    box.innerHTML =
+      '<b>Send your play automatically?</b><br>'
+      + 'Each time a shoe finishes, your session would be sent so ChatGPT can '
+      + 'read it. It is published to the project’s GitHub page.'
+      + '<div style="display:flex;gap:8px;margin-top:9px">'
+      + '<button type="button" id="bjfAutoYes" class="primary small" style="flex:1">Yes, send automatically</button>'
+      + '<button type="button" id="bjfAutoNo" class="secondary small" style="flex:1">No, I’ll press the button</button>'
+      + '</div>';
+    host.appendChild(box);
+    document.getElementById('bjfAutoYes').addEventListener('click', function () {
+      setPref('on'); box.remove(); publishNow(shoeNo);
+    });
+    document.getElementById('bjfAutoNo').addEventListener('click', function () {
+      setPref('off'); box.remove();
+      say('Not sending automatically. Use Send now whenever you want to.');
+    });
+  }
+
+  function onShoeEnded() {
+    var shoeNo = null;
+    try {
+      var raw = JSON.parse(localStorage.getItem('bjfRoundLog') || 'null');
+      var rounds = (raw && (Array.isArray(raw) ? raw : raw.rounds)) || [];
+      shoeNo = rounds.length ? rounds[rounds.length - 1].shoeNumber : null;
+    } catch (e) { shoeNo = null; }
+    // markShoeEnded can fire more than once for the same shoe; publishing twice
+    // would be harmless but pointless, and each publish costs a request.
+    if (shoeNo !== null && shoeNo === lastPublishedShoe) return;
+    askThenMaybePublish(shoeNo);
+  }
+
+  function install() {
+    if (typeof window.markShoeEnded !== 'function') return;
+    var original = window.markShoeEnded;
+    window.markShoeEnded = function () {
+      var r = original.apply(this, arguments);
+      // After the engine has finished, never before: the publish reads the
+      // synced record, and settlement must have landed first.
+      // 1600ms: after settlement has synced AND after reveal.js has built its
+      // alert, so the prompt lands inside the thing that is actually on top.
+      try { setTimeout(onShoeEnded, 1600); } catch (e) { /* ignore */ }
+      return r;
+    };
+  }
+
+  window.BJF_AUTO_PUBLISH = {
+    state: function () { return pref() || 'never asked'; },
+    enable: function () { setPref('on'); },
+    disable: function () { setPref('off'); },
+  };
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install);
+  else install();
+})();
