@@ -590,6 +590,80 @@
       : tone === 'good' ? 'var(--green,#0A5236)' : 'var(--muted,#5F6F67)';
   }
 
+  /* CONFIRMING THE SEND
+   *
+   * The first version wrote a line inside the shoe alert, which is gone the
+   * moment he taps Shuffle new shoe — so the one thing he wanted to see was the
+   * first thing to disappear.
+   *
+   * Two places instead, answering different questions. A toast says "it
+   * happened just now": unmissable, gone on its own, and sitting below the
+   * header where nothing is tapped rather than over the Deal button. The line
+   * under Submit to ChatGPT says "this is when it last happened", and stays
+   * there to be checked at any point after.
+   *
+   * A modal was the wrong shape. He is mid-session and wants to shuffle and
+   * carry on; a dialogue demanding a press to continue is a worse confirmation
+   * than one that simply appears.
+   */
+  function toastStyles() {
+    if (document.getElementById('bjfSentCss')) return;
+    var st = document.createElement('style');
+    st.id = 'bjfSentCss';
+    st.textContent =
+      '#bjfSent{position:fixed;left:50%;top:calc(76px + env(safe-area-inset-top,0px));'
+      + 'transform:translate(-50%,-14px);z-index:80;max-width:min(360px,calc(100vw - 32px));'
+      + 'display:flex;align-items:center;gap:10px;padding:12px 15px;border-radius:14px;'
+      + 'background:var(--green,#0A5236);color:#fff;font-weight:700;font-size:.86rem;'
+      + 'line-height:1.35;box-shadow:0 10px 30px rgba(8,20,14,.3);opacity:0;'
+      + 'pointer-events:none;transition:opacity .18s ease,transform .18s ease}'
+      + '#bjfSent.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}'
+      + '#bjfSent.bad{background:var(--danger,#A32222)}'
+      + '#bjfSent .s-tick{flex:0 0 auto;font-size:1.1rem;line-height:1}'
+      + '#bjfSent .s-text{min-width:0}'
+      + '#bjfSent .s-sub{display:block;font-weight:600;opacity:.88;font-size:.78rem;margin-top:2px}'
+      + '@media(prefers-reduced-motion:reduce){#bjfSent{transition:none}}';
+    document.head.appendChild(st);
+  }
+
+  var toastTimer = null;
+  function toast(title, sub, bad) {
+    toastStyles();
+    var el = document.getElementById('bjfSent');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'bjfSent';
+      el.setAttribute('role', 'status');
+      el.setAttribute('aria-live', 'polite');
+      document.body.appendChild(el);
+      el.addEventListener('click', function () { el.classList.remove('show'); });
+    }
+    el.className = bad ? 'bad' : '';
+    el.innerHTML = '<span class="s-tick" aria-hidden="true"></span><span class="s-text"></span>';
+    el.querySelector('.s-tick').textContent = bad ? '!' : '\u2713';
+    var t = el.querySelector('.s-text');
+    t.textContent = title;
+    if (sub) {
+      var s2 = document.createElement('span');
+      s2.className = 's-sub';
+      s2.textContent = sub;
+      t.appendChild(s2);
+    }
+    requestAnimationFrame(function () { el.classList.add('show'); });
+    clearTimeout(toastTimer);
+    // Long enough to read twice, short enough never to need dismissing.
+    // Failures stay up longer, because they ask something of him.
+    toastTimer = setTimeout(function () { el.classList.remove('show'); }, bad ? 9000 : 5500);
+  }
+
+  /* The standing record, under the button he would otherwise press by hand. */
+  function stampPublishNote(text) {
+    var note = document.getElementById('publishNote');
+    if (!note) return;
+    note.textContent = text;
+    note.classList.remove('hidden');
+  }
+
   function publishNow(shoeNo) {
     say('Sending your play…');
     fetch('/api/publish', { method: 'POST', credentials: 'same-origin' })
@@ -599,9 +673,13 @@
         lastPublishedShoe = shoeNo;
         var b = res.b;
         var when = new Date(b.publishedAt);
-        say('Data sent ✓  ' + when.toLocaleTimeString()
-          + ' · ' + b.rounds + ' rounds from ' + b.sessions
-          + ' session' + (b.sessions === 1 ? '' : 's'), 'good');
+        var clock = when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        var what = b.rounds.toLocaleString() + ' rounds from ' + b.sessions
+          + ' session' + (b.sessions === 1 ? '' : 's');
+        toast('Sent to ChatGPT', what + ' · ' + clock);
+        say('Data sent ✓  ' + clock + ' · ' + what, 'good');
+        stampPublishNote('Sent automatically at ' + clock
+          + '. ChatGPT can now read ' + what + '.');
       })
       .catch(function (err) {
         // Never silent. A publish that stopped working while the record looked
@@ -610,8 +688,11 @@
         // "...that account's record.. Your play is safe".
         var why = String(err && err.message ? err.message : 'unknown')
           .replace(/\.\s*$/, '');
+        toast('Could not send', why, true);
         say('Could not send: ' + why
           + '. Your play is safe — use Send now when you are ready.', 'bad');
+        stampPublishNote('Last send failed: ' + why
+          + '. Your play is safe here — press Send now to try again.');
       });
   }
 
