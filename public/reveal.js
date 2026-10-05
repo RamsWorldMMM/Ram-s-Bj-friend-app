@@ -246,6 +246,29 @@
       function (el) { el.remove(); });
   }
 
+  /* THE HAND LINE — "Hard 8 · Main £50 · In play"
+   *
+   * It carries the three things that matter mid-hand: what the cards make, what
+   * is riding on them, and whether the hand is still live. It was set at .74rem
+   * in muted grey, which disappears at the speed the game is actually played —
+   * Ram reported he simply could not read it.
+   *
+   * The styling lives in theme.css; all this does is say WHICH state the line is
+   * in, because the engine writes the words and gives them no class to hang
+   * anything on. Reading the rendered text is the only hook there is, and it is
+   * the same text the player reads.
+   */
+  function markHandStatus() {
+    try {
+      document.querySelectorAll('.hand-card .hand-meta').forEach(function (meta) {
+        var txt = meta.textContent || '';
+        meta.classList.toggle('is-bust', /\bBust\b/.test(txt));
+        meta.classList.toggle('is-done', /\bComplete\b/.test(txt));
+        meta.classList.toggle('is-live', /\bIn play\b/.test(txt));
+      });
+    } catch (e) { /* cosmetic */ }
+  }
+
   function badgeSideBetWins() {
     if (typeof state === 'undefined' || !state.boxes) return;
 
@@ -938,7 +961,7 @@
         var r = originalRender.apply(this, arguments);
         if (pausing) { disableActions(); flagLastCard(); }
         badgeNaturals();
-        try { badgeSideBetWins(); trimIdleFeedback(); } catch (e) { /* cosmetic */ }
+        try { badgeSideBetWins(); trimIdleFeedback(); markHandStatus(); } catch (e) { /* cosmetic */ }
         return r;
       };
     }
@@ -997,7 +1020,7 @@
         if (!dealt) return r;
         try {
           wagerAlert('');
-          badgeNaturals(); badgeSideBetWins();
+          badgeNaturals(); badgeSideBetWins(); markHandStatus();
           renderSequenceNote(); trimIdleFeedback();
         } catch (e) { /* cosmetic */ }
         return r;
