@@ -1367,10 +1367,61 @@
      is used is worse than one that was never offered. The caps are table rules
      and are not touched here. */
   var SIDE_PRESETS = {
-    pairs: [0, 100, 200, 400],    // cap £400
-    trilux: [0, 50, 100, 200],    // cap £200
-    super: [0, 25, 50, 100],      // cap £100
+    pairs: [0, 100, 200, 400],
+    trilux: [0, 100, 200, 400],
+    super: [0, 100, 200, 400],
   };
+
+  /* RAISED TABLE LIMITS — £400 on every side bet.
+   *
+   * The engine ships Pairs £400, Trilux £200, Super £100 and refuses anything
+   * above at deal time, so changing the buttons alone was not enough: a £400
+   * Trilux was offered and then rejected on Deal.
+   *
+   * Overridden from out here rather than by editing index.html, which is the
+   * standing rule for this project — the engine file stays untouched.
+   *
+   * validateWagers() is MIRRORED rather than patched, because it stops at the
+   * first failure and the bankroll test runs after the cap tests: suppressing a
+   * cap message would have taken the bankroll check down with it. The body below
+   * is the engine's own sequence with only the three ceilings changed. IF THE
+   * ENGINE'S WAGER RULES EVER CHANGE, THIS MUST CHANGE WITH THEM.
+   *
+   * `state` and `readWagers` are reachable here because a top-level let/function
+   * in a classic script lands in the shared global lexical environment. That is
+   * also why `window.state` reads undefined while plain `state` works.
+   */
+  var SIDE_CAP = { pairs: 400, trilux: 400, super: 400 };
+
+  function installRaisedCaps() {
+    if (typeof validateWagers !== 'function' || typeof readWagers !== 'function') return;
+    window.validateWagers = function () {
+      var bets = readWagers();
+      var message = '';
+      bets.forEach(function (b, i) {
+        if (message) return;
+        var box = 'Box ' + (i + 1) + ': ';
+        if (b.main < 1) message = box + 'main wager must be at least \u00a31.';
+        else if (b.pairs !== 0 && (b.pairs < 1 || b.pairs > SIDE_CAP.pairs))
+          message = box + 'Pairs must be \u00a30 or \u00a31\u2013\u00a3' + SIDE_CAP.pairs + '.';
+        else if (b.trilux !== 0 && (b.trilux < 1 || b.trilux > SIDE_CAP.trilux))
+          message = box + 'Trilux must be \u00a30 or \u00a31\u2013\u00a3' + SIDE_CAP.trilux + '.';
+        else if (b.super !== 0 && (b.super < 1 || b.super > SIDE_CAP.super))
+          message = box + 'Super must be \u00a30 or \u00a31\u2013\u00a3' + SIDE_CAP.super + '.';
+        else if (b.super > 0 && b.trilux === 0)
+          message = box + 'Trilux Super requires a Trilux wager.';
+      });
+      var committed = bets.reduce(function (sum, b) {
+        return sum + b.main + b.pairs + b.trilux + b.super;
+      }, 0);
+      if (!message && typeof state !== 'undefined' && committed > state.bankroll) {
+        message = 'Total committed exceeds the available bankroll.';
+      }
+      var w = document.getElementById('warning');
+      if (w) { w.textContent = message; w.classList.toggle('hidden', !message); }
+      return !message;
+    };
+  }
   var SIDE_STEP = 50;
 
   function applySidePresets(root) {
@@ -1389,6 +1440,11 @@
             btns[i].textContent = '\u00a3' + values[i];
           }
         });
+        // clampInput() bounds to the input's own max, so a £400 preset would be
+        // clamped straight back to £200 without this.
+        root.querySelectorAll('[data-field="' + field + '"]').forEach(function (inp) {
+          inp.max = String(SIDE_CAP[field]);
+        });
         root.querySelectorAll('[data-target="' + field + '"][data-step]').forEach(function (b) {
           var up = Number(b.dataset.step) > 0;
           b.dataset.step = String(up ? SIDE_STEP : -SIDE_STEP);
@@ -1397,8 +1453,9 @@
           var small = b.closest('.amount-control');
           small = small && small.querySelector('label small');
           if (small) {
-            small.textContent = small.textContent.replace(
-              /changes by \u00a3\d+/, 'changes by \u00a3' + SIDE_STEP);
+            small.textContent = small.textContent
+              .replace(/\u00a30\u2013\u00a3\d+/, '\u00a30\u2013\u00a3' + SIDE_CAP[field])
+              .replace(/changes by \u00a3\d+/, 'changes by \u00a3' + SIDE_STEP);
           }
         });
       });
@@ -1428,6 +1485,7 @@
   function boot() {
     scheduleFreshStart();
     loadStakingPanel();
+    installRaisedCaps();
     installSidePresets();
     injectStyles();
     relocateTopBanners();
