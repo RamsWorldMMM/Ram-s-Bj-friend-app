@@ -1361,12 +1361,17 @@
    * The stepper moves in 25s rather than 5s, because at these stakes ±£5 is
    * eleven taps from £50 to £100.
    */
+  /* Each product climbs to its OWN ceiling. The asked-for 100/200/400 fits Pairs
+     exactly; Trilux stops at £200 and Super at £100 because the engine rejects a
+     wager above those at deal time, and a button that is refused the moment it
+     is used is worse than one that was never offered. The caps are table rules
+     and are not touched here. */
   var SIDE_PRESETS = {
-    pairs: [0, 50, 100, 150],
-    trilux: [0, 50, 100, 150],
-    super: [0, 25, 50, 100],      // table limit is £100
+    pairs: [0, 100, 200, 400],    // cap £400
+    trilux: [0, 50, 100, 200],    // cap £200
+    super: [0, 25, 50, 100],      // cap £100
   };
-  var SIDE_STEP = 25;
+  var SIDE_STEP = 50;
 
   function applySidePresets(root) {
     try {
