@@ -136,32 +136,69 @@ export async function publishDigests(env, userId, opts = {}) {
    * written first; already-published shoes are skipped unchanged, so each press
    * advances the backlog until it is empty. The index says what is still queued
    * rather than letting a gap look like missing data. */
-  /* Two ceilings, both real.
+  /* THE SUBREQUEST BUDGET IS THE REAL CEILING, AND IT IS SHARED.
    *
-   * The contents API makes one commit per file, so hundreds in a press would be
-   * slow and risk a secondary rate limit. And this Worker is on Cloudflare's
-   * free plan, which allows 50 subrequests per request: every file costs a GET
-   * to read what is there, and a PUT only if it differs. Six digests and the
-   * index already account for fourteen, so the shoe loop gets what is left and
-   * counts both kinds.
+   * Cloudflare's free plan allows 50 subrequests per request, and D1 calls count
+   * toward it as well as fetches. Before this loop runs we have already spent:
+   * the auth lookup, ensureSchema's PRAGMAs on a cold isolate, exportSessions,
+   * and six digests at a GET plus a PUT each. Two hand-tuned constants could not
+   * see any of that, and the worst case came out at 48 of 50.
+   *
+   * Running out mid-loop is the bad failure: every file written before that
+   * point is already its own commit, so the repository is left with summary.json
+   * at the new round count and reports.json at the old one — internally
+   * inconsistent, and looking perfectly fine to anyone reading it.
+   *
+   * So the budget is counted explicitly, and the index write is RESERVED out of
+   * it before the loop starts rather than hoped for afterwards.
    */
-  const MAX_SHOE_WRITES = 12;
-  const MAX_SHOE_REQUESTS = 30;
-  const shoeFiles = buildRawShoeFiles(sessions, { generatedAt });
+  const SUBREQUEST_LIMIT = 50;
+  const SPENT_BEFORE_SHOES = 4 + (files.length * 2);   // auth, 2 PRAGMA, export
+  const RESERVED_FOR_INDEX = 2;
+  let budget = SUBREQUEST_LIMIT - SPENT_BEFORE_SHOES - RESERVED_FOR_INDEX;
+
+  /* OLDEST UNPUBLISHED FIRST.
+   *
+   * The loop used to run newest-first, which meant the backlog could never
+   * drain: 28 shoes of 134 were published and the other 106, going back to
+   * 12 September, were never reached because new shoes kept arriving ahead of
+   * them. Publishing more often made it worse, not better.
+   *
+   * A finished shoe never changes, so the right order is oldest-missing-first:
+   * each publish advances the archive, and the newest shoe is the one most
+   * likely to already be current anyway.
+   */
+  const shoeFiles = buildRawShoeFiles(sessions, { generatedAt })
+    .slice()
+    .sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt)) || a.shoe - b.shoe);
+
   const rawWritten = [];
-  let writes = MAX_SHOE_WRITES;
-  let calls = MAX_SHOE_REQUESTS;
+  const confirmedOnRepo = [];
   for (const f of shoeFiles) {
-    if (writes <= 0 || calls <= 0) break;
+    if (budget < 2) break;                  // a read plus a possible write
     const res = await putFile(token, owner, name, f.path, branch,
       JSON.stringify(f.build(), null, 1) + '\n', message);
     rawWritten.push(res);
-    calls -= res.skipped ? 1 : 2;           // a skip costs the read only
-    if (!res.skipped) writes -= 1;
+    budget -= res.skipped ? 1 : 2;
+    // Present on the repository — either written just now, or read back
+    // unchanged. Both mean the file is there, which is what the index claims.
+    confirmedOnRepo.push(f.path);
   }
-  const publishedPaths = shoeFiles
-    .filter((f) => rawWritten.some((w) => w.path === f.path))
-    .map((f) => f.path);
+
+  /* The index used to mark a shoe published if this run had TOUCHED it, which
+   * said nothing about the 106 it never reached — they were simply absent from
+   * the published set with no way to tell "not yet" from "never". Carrying the
+   * previous index forward means a shoe stays published once it is. */
+  let previouslyPublished = [];
+  try {
+    const prev = await currentFile(token, owner, name, 'data/rounds/index.json', branch);
+    if (prev.text) {
+      previouslyPublished = (JSON.parse(prev.text).shoes || [])
+        .filter((x) => x.published).map((x) => x.file);
+    }
+  } catch { previouslyPublished = []; }     // first run, or unreadable
+
+  const publishedPaths = [...new Set([...previouslyPublished, ...confirmedOnRepo])];
   written.push(await putFile(token, owner, name, 'data/rounds/index.json', branch,
     JSON.stringify(buildRawIndex(shoeFiles, publishedPaths, { generatedAt }), null, 1) + '\n',
     message));
