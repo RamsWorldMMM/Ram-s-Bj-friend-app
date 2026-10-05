@@ -57,18 +57,21 @@ export const COLUMNS = [
  * Holding only the last one keeps peak memory at a single session while still
  * removing the repeat parse within a pass, which is where it actually repeated.
  */
-let lastKey = null;
+let lastSession = null;
 let lastRounds = null;
 export function roundsOf(session) {
   if (!session || typeof session !== 'object') return [];
-  const key = session.id;
-  if (key && key === lastKey) return lastRounds;
+  // Keyed on the OBJECT, not on session.id. Two different objects can carry the
+  // same id with different round logs — a caller building a modified copy does
+  // exactly that — and keying on the id handed back the first object's rounds
+  // for the second. Object identity cannot be wrong in that way.
+  if (session === lastSession) return lastRounds;
   let rounds = [];
   try {
     const parsed = session.round_log_json ? JSON.parse(session.round_log_json) : [];
     rounds = Array.isArray(parsed) ? parsed : (parsed.rounds || []);
   } catch { rounds = []; }
-  lastKey = key;
+  lastSession = session;
   lastRounds = rounds;
   return rounds;
 }
