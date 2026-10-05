@@ -37,6 +37,13 @@ export async function syncSession(db, userId, { sessionId, deviceId, appVersion,
         updated_at          = datetime('now'),
         device_id           = excluded.device_id,
         mode                = excluded.mode,
+        -- A top-up raises state.start as well as state.bankroll, so session P/L
+        -- (bankroll - start) stays a true profit figure and does not count
+        -- deposited capital as winnings. That only holds if BOTH sides reach the
+        -- database. start_bankroll was missing from this list, so it kept the
+        -- value from the row's first write and every top-up appeared as profit
+        -- in the published record — £18,500 across six sessions before this.
+        start_bankroll      = excluded.start_bankroll,
         bankroll            = excluded.bankroll,
         rounds              = excluded.rounds,
         decisions           = excluded.decisions,
