@@ -1,0 +1,189 @@
+{
+ "schema_version": 1,
+ "what_this_is": "One shoe of play, in order. Shoe 6 of session 3d5f22f5. Cards, wagers, every action and every side-bet settlement. Totals live in summary.json.",
+ "session_id": "3d5f22f5-e500-4bdb-a0a8-80ee490143b3",
+ "shoe": 6,
+ "started_at": "2026-09-14 04:12:10",
+ "app_version": "Ram's BJ Friend v1.4.7",
+ "rules": "6D / S17 / ENHC-full-loss / DOA / DAS",
+ "generated_at": "2026-10-07T03:53:04.876Z",
+ "rounds_in_shoe": 1,
+ "read_this_first": [
+  "An action shows the hand BEFORE it. The card it drew is the difference between it and the next action on the same hand, or the finished hand where there is no next action.",
+  "Split children are separate hands. Match an action to its hand by the cards: card text carries the suit, so an action's cards are a unique prefix of exactly one finished hand."
+ ],
+ "rounds": [
+  {
+   "round": 206,
+   "shoe": 6,
+   "position_in_shoe": 1,
+   "cards_remaining_after": 304,
+   "shoe_ended": null,
+   "dealt_at": 1789368355056,
+   "mode": "practice",
+   "dealer": {
+    "cards": [
+     "3♠",
+     "K♣",
+     "A♣",
+     "8♠"
+    ],
+    "total": 22,
+    "soft": false,
+    "blackjack": false,
+    "drew_extra": true
+   },
+   "bankroll_before": 19935,
+   "bankroll_after": 20485,
+   "round_net": 550,
+   "boxes": [
+    {
+     "box": 1,
+     "wagers": {
+      "main": 350,
+      "pairs": 25,
+      "trilux": 25,
+      "super": 25
+     },
+     "hands": [
+      {
+       "hand_index": 0,
+       "cards": [
+        "Q♣",
+        "4♦"
+       ],
+       "total": 14,
+       "soft": false,
+       "bust": false,
+       "bet": 350,
+       "is_split": false,
+       "result": "Won — dealer bust",
+       "net": 350
+      }
+     ],
+     "actions": [
+      {
+       "sequence": 1,
+       "hand_before": [
+        "Q♣",
+        "4♦"
+       ],
+       "hand_index": null,
+       "dealer_card": "3♠",
+       "chose": "Stand",
+       "basic_strategy": "Stand",
+       "followed_strategy": true,
+       "cards_remaining": null,
+       "bankroll_available": null,
+       "hand_bet": null,
+       "could_double": null,
+       "could_split": null
+      }
+     ],
+     "side_bets": [
+      {
+       "product": "pairs",
+       "stake": null,
+       "outcome": "No pair",
+       "multiplier": null,
+       "net": -25,
+       "won": false
+      },
+      {
+       "product": "trilux",
+       "stake": null,
+       "outcome": "No qualifying hand",
+       "multiplier": null,
+       "net": -25,
+       "won": false
+      },
+      {
+       "product": "super",
+       "stake": null,
+       "outcome": "No qualifying hand",
+       "multiplier": null,
+       "net": -25,
+       "won": false
+      }
+     ],
+     "main_net": 350,
+     "side_net": -75,
+     "box_net": 275
+    },
+    {
+     "box": 2,
+     "wagers": {
+      "main": 350,
+      "pairs": 25,
+      "trilux": 25,
+      "super": 25
+     },
+     "hands": [
+      {
+       "hand_index": 0,
+       "cards": [
+        "9♥",
+        "Q♣"
+       ],
+       "total": 19,
+       "soft": false,
+       "bust": false,
+       "bet": 350,
+       "is_split": false,
+       "result": "Won — dealer bust",
+       "net": 350
+      }
+     ],
+     "actions": [
+      {
+       "sequence": 1,
+       "hand_before": [
+        "9♥",
+        "Q♣"
+       ],
+       "hand_index": null,
+       "dealer_card": "3♠",
+       "chose": "Stand",
+       "basic_strategy": "Stand",
+       "followed_strategy": true,
+       "cards_remaining": null,
+       "bankroll_available": null,
+       "hand_bet": null,
+       "could_double": null,
+       "could_split": null
+      }
+     ],
+     "side_bets": [
+      {
+       "product": "pairs",
+       "stake": null,
+       "outcome": "No pair",
+       "multiplier": null,
+       "net": -25,
+       "won": false
+      },
+      {
+       "product": "trilux",
+       "stake": null,
+       "outcome": "No qualifying hand",
+       "multiplier": null,
+       "net": -25,
+       "won": false
+      },
+      {
+       "product": "super",
+       "stake": null,
+       "outcome": "No qualifying hand",
+       "multiplier": null,
+       "net": -25,
+       "won": false
+      }
+     ],
+     "main_net": 350,
+     "side_net": -75,
+     "box_net": 275
+    }
+   ]
+  }
+ ]
+}
