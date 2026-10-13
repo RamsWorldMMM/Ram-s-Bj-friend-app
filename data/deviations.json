@@ -1,19 +1,19 @@
 {
  "what_this_is": "Every departure from basic strategy, one record each, with what was possible at the time and whether the choice changed the order of the cards that followed.",
- "generated_at": "2026-10-12T18:10:03.793Z",
+ "generated_at": "2026-10-13T03:33:50.332Z",
  "read_this_first": [
   "shoe_effect is the field that decides what can be said about cost. \"neutral\" means the correct play would have used the same number of cards, so every later card is unchanged and the difference is exact arithmetic. \"changed\" means every card after it moved, so the cost is permanently unknowable — do not estimate one.",
   "forced_by_bankroll true means the correct play was unaffordable at that moment. That is not a mistake in judgement and should not be counted as one.",
   "Intent — deliberate or accidental — is not recorded anywhere and cannot be inferred from the action. Only Ram can say.",
-  "59 of 97 deviations predate the capture of bankroll and legality, so could_double, could_split and forced_by_bankroll are null for those. They are not false; they are unknown."
+  "59 of 98 deviations predate the capture of bankroll and legality, so could_double, could_split and forced_by_bankroll are null for those. They are not false; they are unknown."
  ],
  "totals": {
-  "deviations": 97,
+  "deviations": 98,
   "forced_by_bankroll": 0,
   "affordability_unknown": 19,
   "shoe_neutral": 20,
   "shoe_changed": 39,
-  "effect_not_determinable": 38,
+  "effect_not_determinable": 39,
   "without_decision_context": 59
  },
  "deviations": [
@@ -1408,6 +1408,30 @@
    "hand_result": "Won — dealer bust",
    "hand_net": 800,
    "dealer_total": 23
+  },
+  {
+   "session_id": "7b755d60-72e0-4337-bc28-508f4690d83d",
+   "round": 1079,
+   "box": 1,
+   "hand_index": 0,
+   "shoe": 2,
+   "position_in_shoe": 1,
+   "cards_remaining_at_decision": 307,
+   "hand": "K♥ 3♣",
+   "dealer_card": "K♥",
+   "chose": "Stand",
+   "correct_play": "Hit",
+   "cards_consumed": 0,
+   "correct_play_would_consume": null,
+   "shoe_effect": "not determinable",
+   "bankroll_available": 391775,
+   "hand_bet": 900,
+   "could_double": true,
+   "could_split": false,
+   "forced_by_bankroll": false,
+   "hand_result": "Lost",
+   "hand_net": -900,
+   "dealer_total": 20
   },
   {
    "session_id": "95f598fb-683a-4215-9473-57e2c71d5590",
