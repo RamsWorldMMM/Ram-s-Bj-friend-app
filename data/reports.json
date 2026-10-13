@@ -1,6 +1,6 @@
 {
  "what_this_is": "The per-session report, one entry per session — the detail that only means anything inside a single session. Money is pounds. For totals across every session read summary.json instead; this file deliberately does not aggregate.",
- "generated_at": "2026-10-13T18:01:25.293Z",
+ "generated_at": "2026-10-13T19:33:05.322Z",
  "read_this_first": [
   "decision_mix is what he was dealt and what he chose, not what was correct. Two sessions at the same accuracy can be entirely different hands, and comparing accuracy without it hides that.",
   "mistakes_detail lists each mistake separately, unlike mistakes.json which groups them into repeating patterns. Use this to see a single session, that one to see a habit.",
@@ -4315,41 +4315,41 @@
   {
    "session_id": "7b755d60-72e0-4337-bc28-508f4690d83d",
    "started_at": "2026-10-11 07:23:39",
-   "rounds": 1539,
-   "decisions": 4850,
-   "correct": 4846,
-   "mistakes": 4,
+   "rounds": 1650,
+   "decisions": 5169,
+   "correct": 5164,
+   "mistakes": 5,
    "accuracy_pct": 99.9,
    "decision_mix": {
-    "hard_hands": 4124,
-    "soft_hands": 444,
-    "pairs": 282,
-    "hit": 2195,
-    "stand": 2238,
-    "double": 324,
-    "split": 93
+    "hard_hands": 4399,
+    "soft_hands": 472,
+    "pairs": 298,
+    "hit": 2334,
+    "stand": 2388,
+    "double": 348,
+    "split": 99
    },
    "box_performance": [
     {
      "box": 1,
-     "decisions": 2094,
-     "correct": 2091,
-     "accuracy_pct": 99.9,
-     "main_pl": -49950
+     "decisions": 2245,
+     "correct": 2241,
+     "accuracy_pct": 99.8,
+     "main_pl": -44400
     },
     {
      "box": 2,
-     "decisions": 2158,
-     "correct": 2158,
+     "decisions": 2300,
+     "correct": 2300,
      "accuracy_pct": 100,
-     "main_pl": -11025
+     "main_pl": -7225
     },
     {
      "box": 3,
-     "decisions": 598,
-     "correct": 597,
+     "decisions": 624,
+     "correct": 623,
      "accuracy_pct": 99.8,
-     "main_pl": -13250
+     "main_pl": -11500
     }
    ],
    "streaks": {
@@ -4359,14 +4359,14 @@
    "largest_main_wager": 1500,
    "bankroll": {
     "start": 20000,
-    "end": 469825,
+    "end": 479475,
     "highest": 527050,
     "lowest": 14300,
     "range": 512750,
     "max_drawdown": 76875
    },
-   "side_bet_share_of_stakes_pct": 27.1,
-   "mistakes_listed": 4,
+   "side_bet_share_of_stakes_pct": 26.9,
+   "mistakes_listed": 5,
    "mistakes_detail": [
     {
      "round": 109,
@@ -4401,6 +4401,15 @@
      "hand": "K♥ 3♣",
      "hand_value": "Hard 13",
      "dealer_card": "K♥",
+     "chose": "Stand",
+     "correct_play": "Hit"
+    },
+    {
+     "round": 1612,
+     "box": 1,
+     "hand": "5♥ 7♥",
+     "hand_value": "Hard 12",
+     "dealer_card": "3♥",
      "chose": "Stand",
      "correct_play": "Hit"
     }
