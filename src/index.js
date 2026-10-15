@@ -31,6 +31,10 @@ const isSecure = (request) => new URL(request.url).protocol === 'https:';
 /* Who may publish. The digests are read as one player's record, so the account
  * that writes them has to be fixed rather than "whoever is signed in". Username
  * comparison is case-insensitive because the users table is COLLATE NOCASE. */
+/* Set while a publish is running, so a second one is refused rather than
+ * interleaved. Module scope, so it lives as long as the isolate. */
+let publishInFlight = false;
+
 function publisherName(env) {
   return (env.PUBLISH_USER || 'ram').trim();
 }
@@ -225,12 +229,35 @@ async function route(request, env, ctx, url) {
       return error('Only ' + publisherName(env) + ' can publish gameplay data. '
         + 'These files are read as that account\'s record.', 403);
     }
+    /* ONE PUBLISH AT A TIME.
+     *
+     * Publishing used to be a button press, so two could not overlap. Now the
+     * shoe-end publish fires on its own, and it can start while he presses Send
+     * now, or two shoe ends can land close together, or a second tab can be
+     * open. Two runs interleaving is what produced the 409 Ram saw — both read
+     * the same sha, the slower one writes against a file that has already moved.
+     *
+     * The retry in publish.js recovers from that; this stops it happening. The
+     * lock is per isolate rather than global, which is the honest limit: it
+     * catches the overlapping-tab and auto-plus-manual cases that actually
+     * occur, not two requests landing in different Cloudflare colos at once.
+     */
+    if (publishInFlight) {
+      return json({
+        ok: false,
+        error: 'A send is already running. It will finish on its own — '
+          + 'nothing is lost.',
+      }, { status: 409 });
+    }
+    publishInFlight = true;
     try {
       const result = await publishDigests(env, user.id, { appVersion: '1.4.7' });
       return json(result);
     } catch (err) {
       console.error('Publish failed:', err?.stack || err);
       return json({ ok: false, error: err?.message || 'Publish failed' }, { status: 502 });
+    } finally {
+      publishInFlight = false;                  // released however it ended
     }
   }
 

@@ -667,11 +667,21 @@
   function publishNow(shoeNo) {
     say('Sending your play…');
     fetch('/api/publish', { method: 'POST', credentials: 'same-origin' })
-      .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, b: b }; }); })
+      .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, status: r.status, b: b }; }); })
       .then(function (res) {
+        /* 409 from the lock is not a failure. It means a send was already
+           running — the shoe-end publish and a press of Send now, or two shoe
+           ends close together. The other one finishes and writes everything;
+           reporting this in red would teach him to distrust a system that is
+           working. */
+        if (res.status === 409) {
+          say('Already sending \u2014 the one in progress covers this.');
+          return;
+        }
         if (!res.ok) throw new Error((res.b && res.b.error) || 'failed');
         lastPublishedShoe = shoeNo;
         var b = res.b;
+        if (!b || !b.publishedAt) return;       // nothing to report
         var when = new Date(b.publishedAt);
         var clock = when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         var what = b.rounds.toLocaleString() + ' rounds from ' + b.sessions

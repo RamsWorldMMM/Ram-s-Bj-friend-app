@@ -74,21 +74,53 @@ function sameIgnoringTimestamp(a, b) {
   } catch { return false; }
 }
 
+/* A 409 means the file moved between our read and our write — the sha we sent
+ * is no longer current. Ram hit exactly this:
+ *
+ *   GitHub write failed for data/reports.json: 409
+ *   "is at 07ce1a51... but expected 4775ffb5..."
+ *
+ * It became likely the moment publishing stopped being one button press: the
+ * shoe-end publish can start while he presses Send now, two shoe ends can land
+ * close together, or a second tab can be open. The sha check is doing its job —
+ * it is what stops two writers clobbering each other — so the answer is not to
+ * drop it but to re-read and try again, which is the whole point of having it.
+ *
+ * Three attempts. A conflict that survives three fresh reads is not a race, it
+ * is something else, and should surface rather than loop.
+ */
+const PUT_ATTEMPTS = 3;
+
 async function putFile(token, owner, name, path, branch, text, message) {
-  const { sha, text: existing } = await currentFile(token, owner, name, path, branch);
-  if (sameIgnoringTimestamp(existing, text)) {
-    return { path, bytes: text.length, skipped: true };
+  let lastStatus = null;
+  let lastBody = '';
+  for (let attempt = 1; attempt <= PUT_ATTEMPTS; attempt += 1) {
+    // Re-read every attempt: after a 409 the stale sha is exactly what has to
+    // be replaced, so reusing the first read would fail the same way forever.
+    const { sha, text: existing } = await currentFile(token, owner, name, path, branch);
+    if (sameIgnoringTimestamp(existing, text)) {
+      return { path, bytes: text.length, skipped: true };
+    }
+    const res = await fetch(`${API}/repos/${owner}/${name}/contents/${encodeURI(path)}`, {
+      method: 'PUT',
+      headers: { ...headers(token), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, content: toBase64(text), branch, ...(sha ? { sha } : {}) }),
+    });
+    if (res.ok) {
+      const body = await res.json();
+      return {
+        path, bytes: text.length, created: !sha,
+        commit: body.commit?.sha?.slice(0, 7),
+        retried: attempt > 1 ? attempt : undefined,
+      };
+    }
+    lastStatus = res.status;
+    lastBody = (await res.text()).slice(0, 200);
+    // 409 is the race and is worth retrying; 401, 403 and 422 are not, and
+    // retrying them just spends the subrequest budget before failing anyway.
+    if (res.status !== 409) break;
   }
-  const res = await fetch(`${API}/repos/${owner}/${name}/contents/${encodeURI(path)}`, {
-    method: 'PUT',
-    headers: { ...headers(token), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ message, content: toBase64(text), branch, ...(sha ? { sha } : {}) }),
-  });
-  if (!res.ok) {
-    throw new Error(`GitHub write failed for ${path}: ${res.status} ${(await res.text()).slice(0, 200)}`);
-  }
-  const body = await res.json();
-  return { path, bytes: text.length, created: !sha, commit: body.commit?.sha?.slice(0, 7) };
+  throw new Error(`GitHub write failed for ${path}: ${lastStatus} ${lastBody}`);
 }
 
 /**
@@ -153,9 +185,12 @@ export async function publishDigests(env, userId, opts = {}) {
    * it before the loop starts rather than hoped for afterwards.
    */
   const SUBREQUEST_LIMIT = 50;
-  const SPENT_BEFORE_SHOES = 4 + (files.length * 2);   // auth, 2 PRAGMA, export
-  const RESERVED_FOR_INDEX = 2;
-  let budget = SUBREQUEST_LIMIT - SPENT_BEFORE_SHOES - RESERVED_FOR_INDEX;
+  // auth, two PRAGMAs on a cold isolate, exportSessions, then a read and a
+  // possible write for each digest. The index costs a read before the loop and
+  // a write after it, so both are accounted for here rather than hoped for.
+  const SPENT_BEFORE_SHOES = 4 + (files.length * 2) + 1;
+  const RESERVED_FOR_INDEX_WRITE = 1;
+  let budget = SUBREQUEST_LIMIT - SPENT_BEFORE_SHOES - RESERVED_FOR_INDEX_WRITE;
 
   /* OLDEST UNPUBLISHED FIRST.
    *
@@ -172,9 +207,32 @@ export async function publishDigests(env, userId, opts = {}) {
     .slice()
     .sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt)) || a.shoe - b.shoe);
 
+  /* The index is read FIRST so it can steer the loop, not just record it.
+   *
+   * Oldest-first was meant to drain the archive and did the opposite: the
+   * oldest shoes are the published ones, each still cost a read to confirm, and
+   * the budget ran out before reaching the first unpublished one. The count sat
+   * at 59 of 246 and could not move — it got worse as Ram played, because every
+   * new shoe lengthened the queue behind a wall of re-reads.
+   *
+   * A finished shoe never changes, so one already recorded as published does
+   * not need reading at all. Skipping those spends the whole budget on the
+   * queue. */
+  let previouslyPublished = [];
+  try {
+    const prev = await currentFile(token, owner, name, 'data/rounds/index.json', branch);
+    if (prev.text) {
+      previouslyPublished = (JSON.parse(prev.text).shoes || [])
+        .filter((x) => x.published).map((x) => x.file);
+    }
+  } catch { previouslyPublished = []; }     // first run, or unreadable
+  const alreadyDone = new Set(previouslyPublished);
+
   const rawWritten = [];
   const confirmedOnRepo = [];
   for (const f of shoeFiles) {
+    // Published already, and complete, so it cannot have changed. Costs nothing.
+    if (alreadyDone.has(f.path) && f.complete) continue;
     if (budget < 2) break;                  // a read plus a possible write
     const res = await putFile(token, owner, name, f.path, branch,
       JSON.stringify(f.build(), null, 1) + '\n', message);
@@ -185,19 +243,9 @@ export async function publishDigests(env, userId, opts = {}) {
     confirmedOnRepo.push(f.path);
   }
 
-  /* The index used to mark a shoe published if this run had TOUCHED it, which
-   * said nothing about the 106 it never reached — they were simply absent from
-   * the published set with no way to tell "not yet" from "never". Carrying the
-   * previous index forward means a shoe stays published once it is. */
-  let previouslyPublished = [];
-  try {
-    const prev = await currentFile(token, owner, name, 'data/rounds/index.json', branch);
-    if (prev.text) {
-      previouslyPublished = (JSON.parse(prev.text).shoes || [])
-        .filter((x) => x.published).map((x) => x.file);
-    }
-  } catch { previouslyPublished = []; }     // first run, or unreadable
-
+  /* Published is cumulative: a shoe stays published once it is, so the previous
+   * index (read above) is carried forward rather than replaced by whatever this
+   * one run happened to touch. */
   const publishedPaths = [...new Set([...previouslyPublished, ...confirmedOnRepo])];
   written.push(await putFile(token, owner, name, 'data/rounds/index.json', branch,
     JSON.stringify(buildRawIndex(shoeFiles, publishedPaths, { generatedAt }), null, 1) + '\n',
