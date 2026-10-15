@@ -1416,6 +1416,21 @@
    */
   var SIDE_CAP = { pairs: 400, trilux: 400, super: 400 };
 
+  /* MAIN WAGER — the ladder Ram actually plays.
+   *
+   * It shipped at £50/£100/£200/£250/£350/£500, which he reported as simply too
+   * low. Unlike the side bets there is no ceiling to raise: the engine only ever
+   * checks that the main wager is at least £1, so this is presets and nothing
+   * else. The bankroll test still applies, so an unaffordable ladder is refused
+   * on Deal exactly as before.
+   *
+   * Six values because the row is a six-column grid; dropping to three would
+   * leave it half empty. The three asked for are all here, with two smaller
+   * rungs kept so a quiet shoe is still possible without typing.
+   */
+  var MAIN_PRESETS = [100, 200, 400, 700, 1000, 1500];
+  var MAIN_STEP = 100;      // £50 was eleven taps from £400 to £1,000
+
   function installRaisedCaps() {
     if (typeof validateWagers !== 'function' || typeof readWagers !== 'function') return;
     window.validateWagers = function () {
@@ -1447,8 +1462,34 @@
   }
   var SIDE_STEP = 50;
 
+  function applyMainPresets(root) {
+    try {
+      root.querySelectorAll('.wager-card').forEach(function (card) {
+        var main = card.querySelector('.main-control');
+        if (!main) return;
+        // No data-preset-target on these: index.html's handler falls back to
+        // 'main', so they are selected by their container instead.
+        var btns = main.querySelectorAll('[data-preset]');
+        for (var i = 0; i < btns.length && i < MAIN_PRESETS.length; i++) {
+          btns[i].dataset.preset = String(MAIN_PRESETS[i]);
+          btns[i].textContent = '\u00a3' + MAIN_PRESETS[i].toLocaleString();
+        }
+        main.querySelectorAll('[data-step]').forEach(function (b) {
+          var up = Number(b.dataset.step) > 0;
+          b.dataset.step = String(up ? MAIN_STEP : -MAIN_STEP);
+        });
+        var small = main.querySelector('label small');
+        if (small) {
+          small.textContent = small.textContent
+            .replace(/changes by \u00a3\d+/, 'changes by \u00a3' + MAIN_STEP);
+        }
+      });
+    } catch (e) { /* the engine's own values still work */ }
+  }
+
   function applySidePresets(root) {
     try {
+      applyMainPresets(root);
       Object.keys(SIDE_PRESETS).forEach(function (field) {
         var values = SIDE_PRESETS[field];
         // Per card, not across all of them: with three boxes there are twelve
