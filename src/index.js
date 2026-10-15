@@ -33,7 +33,27 @@ const isSecure = (request) => new URL(request.url).protocol === 'https:';
  * comparison is case-insensitive because the users table is COLLATE NOCASE. */
 /* Set while a publish is running, so a second one is refused rather than
  * interleaved. Module scope, so it lives as long as the isolate. */
-let publishInFlight = false;
+/* Held as a TIMESTAMP, not a flag.
+ *
+ * A boolean plus finally looks sufficient and is not: when the runtime kills a
+ * request for exceeding CPU, the finally never runs. The marker stayed set and
+ * every later send on that isolate answered 409 "already running" — forever.
+ * Twenty-five sends in a row showed it exactly: one 503, then nine straight
+ * 409s that would only have cleared when the isolate recycled.
+ *
+ * A publish that has not finished in this long is not running any more. Ten
+ * seconds, not ninety: a send takes under four, and the window is how long
+ * publishing stays wedged after a request is killed. Ninety seconds of 409s is
+ * a far worse failure than the overlap the lock exists to prevent — and an
+ * overlap that does slip through is caught by the sha retry in publish.js
+ * anyway. The drain is released before this, since it runs past the reply. */
+const PUBLISH_LOCK_MS = 10_000;
+let publishStartedAt = 0;
+/* A deferred archive drain keeps running on this isolate after its reply has
+ * gone, and it competes for the same CPU allowance as whatever arrives next.
+ * A send landing on top of one is how an otherwise fine publish returned 503.
+ * Counted, so a send can decline to add a drain while one is still going. */
+let drainStartedAt = 0;
 
 function publisherName(env) {
   return (env.PUBLISH_USER || 'ram').trim();
@@ -242,14 +262,14 @@ async function route(request, env, ctx, url) {
      * catches the overlapping-tab and auto-plus-manual cases that actually
      * occur, not two requests landing in different Cloudflare colos at once.
      */
-    if (publishInFlight) {
+    if (publishStartedAt && (Date.now() - publishStartedAt) < PUBLISH_LOCK_MS) {
       return json({
         ok: false,
         error: 'A send is already running. It will finish on its own — '
           + 'nothing is lost.',
       }, { status: 409 });
     }
-    publishInFlight = true;
+    publishStartedAt = Date.now();
     try {
       /* ?backlog=0 is the automatic send: digests only, so Ram is not waiting
          half a minute between shoes. Send now does the archive too. */
@@ -260,14 +280,22 @@ async function route(request, env, ctx, url) {
         backlog,
         // Lets the archive finish after the reply has gone, so Ram is not
         // waiting on fifteen seconds of raw-shoe writes he did not ask for.
-        waitUntil: (pr) => ctx.waitUntil(pr),
+        // Never more than one drain at a time, and never while another is
+        // still going — the queue is recorded, so skipping one simply means it
+        // happens on the next press instead of fighting for the same CPU.
+        waitUntil: (drainStartedAt && (Date.now() - drainStartedAt) < PUBLISH_LOCK_MS)
+          ? null
+          : (pr) => {
+            drainStartedAt = Date.now();
+            ctx.waitUntil(pr.finally(() => { drainStartedAt = 0; }));
+          },
       });
       return json(result);
     } catch (err) {
       console.error('Publish failed:', err?.stack || err);
       return json({ ok: false, error: err?.message || 'Publish failed' }, { status: 502 });
     } finally {
-      publishInFlight = false;                  // released however it ended
+      publishStartedAt = 0;                     // released however it ended
     }
   }
 
