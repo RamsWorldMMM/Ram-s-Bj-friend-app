@@ -48,7 +48,8 @@ function sessionRows(sessions) {
       max_drawdown: round2(s.max_drawdown),
       total_main_staked: round2(s.total_main_staked),
       total_side_staked: round2(s.total_side_staked),
-      has_round_detail: Boolean(s.round_log_json),
+      // Lean rows carry a flag instead of the blob; full rows carry the blob.
+      has_round_detail: Boolean(s.round_log_json) || Boolean(s.has_round_log),
     };
   }).sort((a, b) => String(a.started_at || '').localeCompare(String(b.started_at || '')));
 }
@@ -113,11 +114,16 @@ function describeUpcard(card) {
 
 /** Mistakes grouped by the situation, which is what makes a pattern visible. */
 function mistakePatterns(allRows) {
+  return mistakePatternsFrom(allRows
+    .filter((r) => r.decisions && r.decisions_incorrect)
+    .map((r) => r.decisions));
+}
+
+/** From the decision strings themselves, which is what a fragment keeps. */
+function mistakePatternsFrom(decisionStrings) {
   const byCell = new Map();
-  for (const r of allRows) {
-    if (!r.decisions || !r.decisions_incorrect) continue;
-    // "8♠ 3♦ vs 9♥: Hit [should Double] | ..." — one entry per decision.
-    String(r.decisions).split(' | ').forEach((entry) => {
+  for (const line of decisionStrings) {
+    String(line).split(' | ').forEach((entry) => {
       const m = entry.match(/^(.+?)\s+vs\s+(\S+):\s+(\S+)\s+\[should\s+([^\]]+)\]$/);
       if (!m) return;                         // graded correct, or an unknown shape
       const hand = describeHand(m[1]);
@@ -143,10 +149,15 @@ function mistakePatterns(allRows) {
  * analytical result.
  */
 function shoeRows(sessions) {
+  return sessions.flatMap((s) => shoeRowsFor(s, roundsOf(s)));
+}
+
+/* One session's shoe rows, from rounds already in hand — so the fragment
+ * builder can reuse it without parsing the log a second time. */
+function shoeRowsFor(s, rounds) {
   const out = [];
-  for (const s of sessions) {
-    const rounds = roundsOf(s);
-    if (!rounds.length) continue;
+  {
+    if (!rounds.length) return out;
 
     const shoes = new Map();
     rounds.forEach((r) => {
@@ -446,7 +457,11 @@ function stakingForProduct(bets, key) {
 /** The staking file. Separate per product, so a win in one cannot mask a loss
  *  in another — which is the whole reason the three are never pooled here. */
 export function buildStakingDigest(sessions, meta = {}) {
-  const bets = sideBets(sessions);
+  return stakingFrom(sideBets(sessions), meta);
+}
+
+/** The same report, from bets already reduced out of the round logs. */
+export function stakingFrom(bets, meta = {}) {
   const products = Object.keys(SIDE_MULT).map((k) => stakingForProduct(bets, k)).filter(Boolean);
   const staked = bets.reduce((a, b) => a + b.stake, 0);
   const avg = bets.length ? staked / bets.length : 0;
@@ -947,5 +962,261 @@ export function buildRawIndex(files, writtenPaths, meta = {}) {
       played_to_cut_card: f.played_to_cut_card,
       published: written.has(f.path),
     })),
+  };
+}
+
+/* ---------------------------------------------------------- session cache ---
+ * A finished session's contribution to every digest is fixed forever, yet each
+ * publish re-read its round log from D1 and re-parsed it. With 64 sessions that
+ * is 37 MB fetched and parsed five times to recompute numbers that had not
+ * moved in weeks — about 1.5s of the send on D1 alone, growing with every
+ * session Ram plays.
+ *
+ * This reduces one session to the small set of things the digests actually
+ * consume. The reduced form is a few KB where the round log is megabytes, and
+ * only the session still being played ever needs rebuilding.
+ */
+
+const FRAGMENT_VERSION = 3;
+
+export function buildSessionFragment(s) {
+  const rounds = roundsOf(s);
+  /* ONE ordered list, not three.
+   *
+   * Grouping by product and concatenating looked equivalent — the totals match
+   * to the penny — but drawdown is a path, not a sum. Reordering the same bets
+   * moved the combined figure from +£8,058 worse-than-flat to -£1,716
+   * better-than-flat, which is the opposite conclusion from identical data.
+   * Product is carried as an index to keep the fragment small. */
+  const bets = [];
+  const ORDER = Object.keys(SIDE_MULT);
+  rounds.slice().sort((a, b) => (a.round || 0) - (b.round || 0)).forEach((r) => {
+    (r.boxes || []).forEach((box) => {
+      ORDER.forEach((p) => {
+        const b = (box.side || {})[p];
+        if (!b || !b.name || b.name === 'Not played') return;
+        const mult = typeof b.mult === 'number' ? b.mult : SIDE_MULT[p][b.name];
+        if (mult === undefined) return;
+        const net = Number(b.net) || 0;
+        const stake = (typeof b.stake === 'number' && b.stake > 0)
+          ? b.stake : (mult === 0 ? -net : net / mult);
+        if (!(stake > 0)) return;
+        // [product index, stake, multiplier, box] in the order played.
+        bets.push([ORDER.indexOf(p), round2(stake), mult, box.number]);
+      });
+    });
+  });
+
+  return {
+    v: FRAGMENT_VERSION,
+    session_id: s.id,
+    rounds_seen: rounds.length,
+    shoes: shoeRowsFor(s, rounds),
+    bets,
+    deviations: deviationsForSession(s),
+    report: reportForSession(s),
+    mistake_rows: rowsForSession(s)
+      .filter((r) => r.decisions && r.decisions_incorrect)
+      .map((r) => r.decisions),
+  };
+}
+
+/** Is this session's cached fragment still good? */
+export function fragmentIsCurrent(s) {
+  if (!s || !s.digest_cache_json || !s.digest_cache_at) return false;
+  try {
+    const f = JSON.parse(s.digest_cache_json);
+    if (!f || f.v !== FRAGMENT_VERSION) return false;
+  } catch { return false; }
+  // Rebuilt at or after the last write to the session.
+  return String(s.digest_cache_at) >= String(s.updated_at || '');
+}
+
+export function fragmentOf(s) {
+  try { return JSON.parse(s.digest_cache_json); } catch { return null; }
+}
+
+/**
+ * The six published files, assembled from per-session fragments.
+ *
+ * Identical output to building from the round logs — the fragments hold the
+ * same reduced numbers — but it reads 0.86 MB instead of 29.6 MB and parses
+ * none of it five times over.
+ *
+ * summary.json is unaffected either way: it was always built from the
+ * denormalised columns and never touched a round log.
+ */
+export function buildAllFromFragments(sessions, frags, meta = {}) {
+  const generatedAt = meta.generatedAt || null;
+  const rows = sessionRows(sessions);
+
+  const shoes = frags.flatMap((f) => (f && f.shoes) || []);
+  const cut = shoes.filter((x) => x.played_to_cut_card).length;
+  /* Rebuilt in the order they were placed — drawdown is a path, so the order
+   * is part of the data, not a presentation detail. */
+  const PRODUCTS = Object.keys(SIDE_MULT);
+  const bets = [];
+  frags.forEach((f) => {
+    if (!f || !Array.isArray(f.bets)) return;
+    f.bets.forEach(([pi, stake, mult, box]) => {
+      bets.push({ p: PRODUCTS[pi], stake, mult, box });
+    });
+  });
+
+  const deviations = frags.flatMap((f) => (f && f.deviations) || [])
+    .sort((a, b) => String(a.session_id).localeCompare(String(b.session_id)) || a.round - b.round);
+  const forced = deviations.filter((d) => d.forced_by_bankroll === true).length;
+  const unknownForce = deviations.filter((d) => d.forced_by_bankroll === null).length;
+  const neutral = deviations.filter((d) => d.shoe_effect === 'neutral').length;
+  const changed = deviations.filter((d) => d.shoe_effect === 'changed').length;
+  const noCtx = deviations.filter((d) => d.bankroll_available === null).length;
+
+  const reports = frags.map((f) => f && f.report).filter(Boolean)
+    .sort((a, b) => String(a.started_at || '').localeCompare(String(b.started_at || '')));
+  const capped = reports.filter((r) => r.mistakes > r.mistakes_listed);
+
+  return {
+    summary: {
+      what_this_is: 'Every blackjack session recorded by Ram\'s BJ Friend, summarised '
+        + 'one row per session. Money is pounds. accuracy_pct is correct decisions as a '
+        + 'percentage of decisions graded against basic strategy.',
+      generated_at: generatedAt,
+      app_version: meta.appVersion || null,
+      rules: sessions[0]?.rules_profile
+        || '6 decks / dealer stands soft 17 / European No Hole Card, full loss on '
+           + 'splits and doubles / double on any two / double after split',
+      read_this_first: [
+        'A top-up of the bankroll is capital, not winnings: session_pl already '
+          + 'excludes deposits, so it stays a true profit-and-loss figure.',
+        `${rows.filter((r) => !r.has_round_detail).length} of ${rows.length} session(s) `
+          + 'have no per-round detail and appear in totals only.',
+        'Side bets are decided the moment the cards are dealt, before any player '
+          + 'decision, so they cannot be affected by how a hand was played.',
+      ],
+      lifetime: lifetime(rows),
+      sessions: rows,
+    },
+    shoes: {
+      what_this_is: 'One row per shoe. A shoe is the 6-deck pack; it is reshuffled '
+        + 'when the cut card is reached, roughly every 22 to 28 rounds.',
+      generated_at: generatedAt,
+      read_this_first: [
+        'played_to_cut_card tells you whether the shoe finished. false means the '
+          + 'player stopped part-way through it, so that shoe is a fragment and is '
+          + 'NOT comparable with a complete one.',
+        `${cut} of ${shoes.length} shoes here were played to the cut card.`,
+        'Money figures are the net for that shoe in pounds.',
+      ],
+      shoes,
+    },
+    mistakes: {
+      what_this_is: 'Recurring strategy errors, grouped by the exact situation and '
+        + 'ordered by how often each happened.',
+      generated_at: generatedAt,
+      patterns: mistakePatternsFrom(frags.flatMap((f) => (f && f.mistake_rows) || [])),
+    },
+    staking: stakingFrom(bets, { generatedAt }),
+    reports: {
+      what_this_is: 'The per-session report, one entry per session — the detail that '
+        + 'only means anything inside a single session.',
+      generated_at: generatedAt,
+      read_this_first: [
+        'decision_mix is what he was dealt and what he chose, not what was correct.',
+        'mistakes_detail lists each mistake separately, unlike mistakes.json which '
+          + 'groups them into repeating patterns.',
+        'bankroll.range is the high-water mark minus the low-water mark, which is '
+          + 'NOT the same as max_drawdown.',
+        capped.length
+          ? `${capped.length} session(s) had more mistakes than the ${MAX_MISTAKES_LISTED} listed.`
+          : 'Every mistake is listed in full; none were truncated.',
+      ],
+      sessions: reports,
+    },
+    deviations: {
+      what_this_is: 'Every departure from basic strategy, one record each, with '
+        + 'what was possible at the time and whether the choice changed the order '
+        + 'of the cards that followed.',
+      generated_at: generatedAt,
+      read_this_first: [
+        'shoe_effect decides what can be said about cost. "neutral" means the '
+          + 'correct play would have used the same number of cards, so the '
+          + 'difference is exact arithmetic. "changed" means every card after it '
+          + 'moved, so the cost is permanently unknowable — do not estimate one.',
+        'forced_by_bankroll true means the correct play was unaffordable at that '
+          + 'moment. That is not a mistake in judgement.',
+        'Intent — deliberate or accidental — is not recorded and cannot be '
+          + 'inferred from the action. Only Ram can say.',
+        noCtx
+          ? `${noCtx} of ${deviations.length} deviations predate the capture of `
+            + 'bankroll and legality, so those fields are null — unknown, not false.'
+          : 'Every deviation carries the bankroll and legality of the moment.',
+      ],
+      totals: {
+        deviations: deviations.length,
+        forced_by_bankroll: forced,
+        affordability_unknown: unknownForce,
+        shoe_neutral: neutral,
+        shoe_changed: changed,
+        effect_not_determinable: deviations.length - neutral - changed,
+        without_decision_context: noCtx,
+      },
+      deviations,
+    },
+  };
+}
+
+/* ------------------------------------------------- raw shoes, from fragments ---
+ * Enumerating the archive and WRITING part of it are different jobs with very
+ * different costs. The index needs to know every shoe that exists; the write
+ * needs the rounds of six of them. Building all the bodies to answer the first
+ * question is what made the manual send take half a minute.
+ *
+ * The fragment already carries one row per shoe, so the index comes from that —
+ * no round logs at all. Bodies are built only for the shoes actually going up,
+ * from blobs loaded for just those sessions.
+ */
+export function shoeIndexFromFragments(sessions, frags) {
+  const live = sessions.reduce((newest, s) => (
+    !newest || String(s.updated_at || '') > String(newest.updated_at || '') ? s : newest
+  ), null);
+  const liveId = live ? live.id : null;
+
+  const out = [];
+  frags.forEach((f) => {
+    if (!f || !Array.isArray(f.shoes)) return;
+    f.shoes.forEach((row) => {
+      out.push({
+        path: `data/rounds/${String(row.session_id).slice(0, 8)}-shoe${row.shoe}.json`,
+        sessionId: row.session_id,
+        shoe: row.shoe,
+        rounds: row.rounds,
+        startedAt: row.started_at,
+        played_to_cut_card: !!row.played_to_cut_card,
+        // Settled for good: reshuffled past, or its session is no longer live.
+        complete: !!row.played_to_cut_card || row.session_id !== liveId,
+      });
+    });
+  });
+  return out.sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt)) || a.shoe - b.shoe);
+}
+
+/** One shoe's file, from that session's rounds. */
+export function buildShoeBody(session, shoe, meta = {}) {
+  const raw = buildSessionRaw(session, meta);
+  const rounds = raw.rounds.filter((r) => (r.shoe ?? 1) === shoe);
+  return {
+    schema_version: raw.schema_version,
+    what_this_is: `One shoe of play, in order. Shoe ${shoe} of session `
+      + `${String(session.id).slice(0, 8)}. Cards, wagers, every action and every `
+      + 'side-bet settlement. Totals live in summary.json.',
+    session_id: session.id,
+    shoe,
+    started_at: session.started_at,
+    app_version: raw.app_version,
+    rules: raw.rules,
+    generated_at: meta.generatedAt || null,
+    rounds_in_shoe: rounds.length,
+    read_this_first: raw.read_this_first.slice(0, 2),
+    rounds,
   };
 }

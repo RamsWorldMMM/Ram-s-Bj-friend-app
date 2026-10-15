@@ -10,8 +10,8 @@
  */
 
 import {
-  buildDigests, buildStakingDigest, buildReportDigest,
-  buildDeviationDigest, buildRawShoeFiles, buildRawIndex,
+  buildRawIndex, buildSessionFragment, buildAllFromFragments,
+  fragmentIsCurrent, fragmentOf, shoeIndexFromFragments, buildShoeBody,
 } from './digest.js';
 import * as repo from './repo.js';
 
@@ -144,24 +144,60 @@ export async function publishDigests(env, userId, opts = {}) {
   const name = env.GITHUB_REPO || 'Ram-s-Bj-friend-app';
   const branch = env.GITHUB_BRANCH || 'main';
 
-  const sessions = await repo.exportSessions(env.DB, userId, null);
+  const t = [];
+  const mark = (label, from) => { t.push([label, Math.round(Date.now() - from)]); return Date.now(); };
+  let t0 = Date.now();
+
+  /* Pull the rows WITHOUT the 30 MB of round logs, then rebuild only the
+   * sessions whose cached fragment is out of date — in practice the one still
+   * being played, and on the very first run all of them. */
+  const sessions = await repo.exportSessionsLean(env.DB, userId);
+  t0 = mark('d1-lean', t0);
+
+  const stale = sessions.filter((s) => !fragmentIsCurrent(s));
+  if (stale.length) {
+    const blobs = await repo.loadBlobs(env.DB, userId, stale.map((s) => s.id));
+    const stamp = new Date().toISOString();
+    for (const s of stale) {
+      const blob = blobs.get(s.id);
+      if (blob) { s.round_log_json = blob.round_log_json; s.state_json = blob.state_json; }
+      const fragment = buildSessionFragment(s);
+      s.digest_cache_json = JSON.stringify(fragment);
+      s.digest_cache_at = stamp;
+      // Written back so the next send does not pay for it again. Failure here
+      // costs speed, never correctness: a session with no usable cache is
+      // simply rebuilt next time.
+      try {
+        await repo.saveFragment(env.DB, userId, s.id, s.digest_cache_json, stamp);
+      } catch { /* the figures are already built; the cache is an optimisation */ }
+      // Let the blob go: holding 30 MB of parsed logs is what put the Worker
+      // over its memory ceiling before.
+      delete s.round_log_json;
+      delete s.state_json;
+    }
+  }
+  t0 = mark('fragments:' + stale.length, t0);
   const generatedAt = new Date().toISOString();
-  const digests = buildDigests(sessions, { generatedAt, appVersion: opts.appVersion });
+  const frags = sessions.map((s) => fragmentOf(s));
+  const built = buildAllFromFragments(sessions, frags, {
+    generatedAt, appVersion: opts.appVersion,
+  });
+  t0 = mark('build', t0);
 
   const files = [
-    ['data/summary.json', digests.summary],
-    ['data/shoes.json', digests.shoes],
-    ['data/mistakes.json', digests.mistakes],
+    ['data/summary.json', built.summary],
+    ['data/shoes.json', built.shoes],
+    ['data/mistakes.json', built.mistakes],
     // Answers the side-bet staking question directly, rather than shipping the
     // round-level data and hoping the arithmetic is done correctly downstream.
-    ['data/staking.json', buildStakingDigest(sessions, { generatedAt })],
+    ['data/staking.json', built.staking],
     // The report Ram was copying out by hand and pasting in. Published, so the
     // button carries everything the paste did and he no longer has to do both.
-    ['data/reports.json', buildReportDigest(sessions, { generatedAt })],
-    ['data/deviations.json', buildDeviationDigest(sessions, { generatedAt })],
+    ['data/reports.json', built.reports],
+    ['data/deviations.json', built.deviations],
   ];
 
-  const rounds = digests.summary.lifetime.rounds;
+  const rounds = built.summary.lifetime.rounds;
   const message = `Publish gameplay data — ${sessions.length} session(s), ${rounds} rounds`;
 
   /* Read every digest at once, then write only what changed, one at a time.
@@ -170,6 +206,7 @@ export async function publishDigests(env, userId, opts = {}) {
    * latency for no reason. Writes stay sequential on purpose: they all commit to
    * the same branch, and concurrent commits to one ref conflict with each other
    * — which is the very thing being fixed here. */
+  t0 = Date.now();                             // everything below is network
   const bodies = files.map(([path, obj]) => [path, JSON.stringify(obj, null, 1) + '\n']);
   const existing = await Promise.all(
     bodies.map(([path]) => currentFile(token, owner, name, path, branch)
@@ -219,6 +256,15 @@ export async function publishDigests(env, userId, opts = {}) {
    * index and drains on the next manual press. */
   const withBacklog = opts.backlog !== false;
 
+  /* When the caller gives us a waitUntil, the archive is drained AFTER the
+   * response has gone. Ram presses Send now and waits; the six summary files
+   * are what he is waiting for, and they are done in about two seconds. The
+   * raw-shoe writes are a backlog being filled in behind him and were adding
+   * fifteen. Nothing is misreported: the response only ever claims the digests,
+   * and the index on the repository remains the record of what is actually
+   * there, so the next run sees the truth whatever happened here. */
+  const defer = typeof opts.waitUntil === 'function' ? opts.waitUntil : null;
+
   const SUBREQUEST_LIMIT = 50;
   // auth, two PRAGMAs on a cold isolate, exportSessions, then a read and a
   // possible write for each digest. The index costs a read before the loop and
@@ -238,9 +284,13 @@ export async function publishDigests(env, userId, opts = {}) {
    * each publish advances the archive, and the newest shoe is the one most
    * likely to already be current anyway.
    */
-  const shoeFiles = buildRawShoeFiles(sessions, { generatedAt })
-    .slice()
-    .sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt)) || a.shoe - b.shoe);
+  /* Only when the backlog is actually being written. buildRawShoeFiles walks
+   * every round of every session and builds an object for each — a full pass
+   * over the whole history — and the fast send was paying for it purely to
+   * report how many shoes remained. */
+  // Costs nothing: one row per shoe is already in each fragment.
+  const shoeFiles = shoeIndexFromFragments(sessions, frags);
+  t0 = mark('shoe-index', t0);
 
   /* The index is read FIRST so it can steer the loop, not just record it.
    *
@@ -275,18 +325,33 @@ export async function publishDigests(env, userId, opts = {}) {
 
   const rawWritten = [];
   const confirmedOnRepo = [];
-  for (const f of (withBacklog ? shoeFiles : [])) {
-    // Published already, and settled, so it cannot have changed. Costs nothing.
-    if (alreadyDone.has(f.path) && f.complete) continue;
-    if (shoeWrites <= 0) break;
-    if (budget < 2) break;                  // a read plus a possible write
+
+  /* Decide WHICH shoes go up before loading anything. A settled shoe already on
+   * the repository can never change, so it is skipped without a read; what is
+   * left is the queue, oldest first. Only then are the round logs fetched, and
+   * only for the sessions those shoes belong to — a handful, not all 64. */
+  const due = withBacklog
+    ? shoeFiles.filter((f) => !(alreadyDone.has(f.path) && f.complete)).slice(0, MAX_SHOE_WRITES)
+    : [];
+  const dueBlobs = due.length
+    ? await repo.loadBlobs(env.DB, userId, [...new Set(due.map((f) => f.sessionId))])
+    : new Map();
+  const byId = new Map(sessions.map((s) => [s.id, s]));
+
+  const drain = async () => {
+  for (const f of due) {
+    if (shoeWrites <= 0 || budget < 2) break;
+    const blob = dueBlobs.get(f.sessionId);
+    const session = byId.get(f.sessionId);
+    if (!blob || !session) continue;            // vanished between the two reads
+    const body = buildShoeBody(
+      { ...session, round_log_json: blob.round_log_json }, f.shoe, { generatedAt },
+    );
     const res = await putFile(token, owner, name, f.path, branch,
-      JSON.stringify(f.build(), null, 1) + '\n', message, false);
+      JSON.stringify(body, null, 1) + '\n', message, false);
     rawWritten.push(res);
     budget -= res.skipped ? 1 : 2;
     if (!res.skipped) shoeWrites -= 1;
-    // Present on the repository — either written just now, or read back
-    // unchanged. Both mean the file is there, which is what the index claims.
     confirmedOnRepo.push(f.path);
   }
 
@@ -301,15 +366,28 @@ export async function publishDigests(env, userId, opts = {}) {
       JSON.stringify(buildRawIndex(shoeFiles, publishedPaths, { generatedAt }), null, 1) + '\n',
       message));
   }
+  };
+
+  if (withBacklog) {
+    if (defer) defer(drain().catch((e) => console.error('archive drain failed:', e)));
+    else await drain();
+  }
 
   const rawNew = rawWritten.filter((r) => !r.skipped).length;
+  mark('github', t0);
 
   return {
+    timings: Object.fromEntries(t),
+    /* Counted from what is known at the moment of replying. When the drain is
+     * deferred it has not run yet, so reporting "written" would be a guess —
+     * queued is the fact, and data/rounds/index.json is the record of what
+     * actually landed. */
     rawShoes: {
       total: shoeFiles.length,
+      queued: Math.max(0, shoeFiles.length - previouslyPublished.length),
+      draining: withBacklog,
+      deferred: Boolean(defer && withBacklog),
       writtenThisTime: rawNew,
-      alreadyCurrent: rawWritten.length - rawNew,
-      remaining: Math.max(0, shoeFiles.length - publishedPaths.length),
     },
     ok: true,
     publishedAt: generatedAt,
