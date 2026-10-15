@@ -1029,3 +1029,25 @@ body.playing-mode .app-header .status-strip.session-summary { display: grid; }
 @media (max-width: 560px) {
   .hand-card .hand-meta { font-size: .86rem; padding: 7px 9px; }
 }
+
+/* ------------------------------------------------ main wager: three presets */
+/* The markup ships six buttons in a six-column grid (three columns on a phone,
+   so two rows). The ladder is three now — £400 / £700 / £1,500 — and the
+   surplus buttons are hidden rather than removed, because index.html is the
+   untouched engine and its click handler is bound to what it built.
+
+   So the row has to be told it holds three, or they sit beside three empty
+   columns. Three across also means they are no longer squeezed, which is why
+   the type goes back up from the .7rem six had to use. */
+.preset-row.preset-row-6.bjf-main-presets {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.preset-row.preset-row-6.bjf-main-presets button {
+  font-size: .88rem;
+  padding: 0 6px;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 560px) {
+  .preset-row.preset-row-6.bjf-main-presets button { font-size: .84rem; }
+}
