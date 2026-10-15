@@ -41,7 +41,15 @@ function headers(token) {
 
 /** Current sha and decoded content for a path, or nulls when it does not exist.
  *  The content is what lets an unchanged file be skipped. */
-async function currentFile(token, owner, name, path, branch) {
+/* `decode` is off for the raw shoe files.
+ *
+ * Decoding is what makes the comparison possible, and the comparison is what
+ * lets an unchanged digest be skipped — worth it for six small files. For the
+ * shoe archive it is pure cost: each body is ~100 KB, the decode walks it a
+ * byte at a time through a callback, and a settled shoe is already skipped by
+ * path before it gets here. Doing it anyway is what took the full send past the
+ * Worker's CPU ceiling and returned 1102. */
+async function currentFile(token, owner, name, path, branch, decode = true) {
   const url = `${API}/repos/${owner}/${name}/contents/${encodeURI(path)}?ref=${encodeURIComponent(branch)}`;
   const res = await fetch(url, { headers: headers(token) });
   if (res.status === 404) return { sha: null, text: null };
@@ -49,7 +57,7 @@ async function currentFile(token, owner, name, path, branch) {
   const body = await res.json();
   let text = null;
   try {
-    if (body.content && body.encoding === 'base64') {
+    if (decode && body.content && body.encoding === 'base64') {
       const bin = atob(body.content.replace(/\n/g, ''));
       const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
       text = new TextDecoder().decode(bytes);
@@ -91,14 +99,14 @@ function sameIgnoringTimestamp(a, b) {
  */
 const PUT_ATTEMPTS = 3;
 
-async function putFile(token, owner, name, path, branch, text, message) {
+async function putFile(token, owner, name, path, branch, text, message, compare = true) {
   let lastStatus = null;
   let lastBody = '';
   for (let attempt = 1; attempt <= PUT_ATTEMPTS; attempt += 1) {
     // Re-read every attempt: after a 409 the stale sha is exactly what has to
     // be replaced, so reusing the first read would fail the same way forever.
-    const { sha, text: existing } = await currentFile(token, owner, name, path, branch);
-    if (sameIgnoringTimestamp(existing, text)) {
+    const { sha, text: existing } = await currentFile(token, owner, name, path, branch, compare);
+    if (compare && sameIgnoringTimestamp(existing, text)) {
       return { path, bytes: text.length, skipped: true };
     }
     const res = await fetch(`${API}/repos/${owner}/${name}/contents/${encodeURI(path)}`, {
@@ -156,10 +164,26 @@ export async function publishDigests(env, userId, opts = {}) {
   const rounds = digests.summary.lifetime.rounds;
   const message = `Publish gameplay data — ${sessions.length} session(s), ${rounds} rounds`;
 
+  /* Read every digest at once, then write only what changed, one at a time.
+   *
+   * Reads are independent, so doing them in sequence spent seven round trips of
+   * latency for no reason. Writes stay sequential on purpose: they all commit to
+   * the same branch, and concurrent commits to one ref conflict with each other
+   * — which is the very thing being fixed here. */
+  const bodies = files.map(([path, obj]) => [path, JSON.stringify(obj, null, 1) + '\n']);
+  const existing = await Promise.all(
+    bodies.map(([path]) => currentFile(token, owner, name, path, branch)
+      .catch(() => ({ sha: null, text: null }))),
+  );
+
   const written = [];
-  for (const [path, obj] of files) {
-    written.push(await putFile(token, owner, name, path, branch,
-      JSON.stringify(obj, null, 1) + '\n', message));
+  for (let i = 0; i < bodies.length; i += 1) {
+    const [path, text] = bodies[i];
+    if (sameIgnoringTimestamp(existing[i].text, text)) {
+      written.push({ path, bytes: text.length, skipped: true });
+      continue;
+    }
+    written.push(await putFile(token, owner, name, path, branch, text, message));
   }
 
   /* The raw record, split by shoe. Capped per publish because the contents API
@@ -184,6 +208,17 @@ export async function publishDigests(env, userId, opts = {}) {
    * So the budget is counted explicitly, and the index write is RESERVED out of
    * it before the loop starts rather than hoped for afterwards.
    */
+  /* The archive backfill is the slow half, and it is not what Ram is waiting
+   * for. He finishes a shoe, the digests go up, and he asks ChatGPT about the
+   * play he just did — that needs the six summary files and nothing else. The
+   * raw per-shoe records are a backlog being filled in behind him, and writing
+   * a dozen 100 KB files is what turned a send into half a minute.
+   *
+   * So the automatic send writes the digests only, and Send now does the
+   * backfill as well. Nothing is lost either way: the queue is recorded in the
+   * index and drains on the next manual press. */
+  const withBacklog = opts.backlog !== false;
+
   const SUBREQUEST_LIMIT = 50;
   // auth, two PRAGMAs on a cold isolate, exportSessions, then a read and a
   // possible write for each digest. The index costs a read before the loop and
@@ -228,16 +263,28 @@ export async function publishDigests(env, userId, opts = {}) {
   } catch { previouslyPublished = []; }     // first run, or unreadable
   const alreadyDone = new Set(previouslyPublished);
 
+  /* A separate cap on WRITES, not just on subrequests.
+   *
+   * Each shoe body is around 100 KB and has to be built and serialised before
+   * it is sent. Twelve of those on top of the digest build took the request
+   * past what the Worker would give it and returned 503 — the subrequest budget
+   * said there was room, but the CPU did not. Six completes reliably, and the
+   * queue drains over successive presses rather than failing on each one. */
+  const MAX_SHOE_WRITES = 6;
+  let shoeWrites = MAX_SHOE_WRITES;
+
   const rawWritten = [];
   const confirmedOnRepo = [];
-  for (const f of shoeFiles) {
-    // Published already, and complete, so it cannot have changed. Costs nothing.
+  for (const f of (withBacklog ? shoeFiles : [])) {
+    // Published already, and settled, so it cannot have changed. Costs nothing.
     if (alreadyDone.has(f.path) && f.complete) continue;
+    if (shoeWrites <= 0) break;
     if (budget < 2) break;                  // a read plus a possible write
     const res = await putFile(token, owner, name, f.path, branch,
-      JSON.stringify(f.build(), null, 1) + '\n', message);
+      JSON.stringify(f.build(), null, 1) + '\n', message, false);
     rawWritten.push(res);
     budget -= res.skipped ? 1 : 2;
+    if (!res.skipped) shoeWrites -= 1;
     // Present on the repository — either written just now, or read back
     // unchanged. Both mean the file is there, which is what the index claims.
     confirmedOnRepo.push(f.path);
@@ -247,9 +294,13 @@ export async function publishDigests(env, userId, opts = {}) {
    * index (read above) is carried forward rather than replaced by whatever this
    * one run happened to touch. */
   const publishedPaths = [...new Set([...previouslyPublished, ...confirmedOnRepo])];
-  written.push(await putFile(token, owner, name, 'data/rounds/index.json', branch,
-    JSON.stringify(buildRawIndex(shoeFiles, publishedPaths, { generatedAt }), null, 1) + '\n',
-    message));
+  // Only when the archive actually moved. On a fast send nothing did, and
+  // rewriting it would cost a round trip to change one timestamp.
+  if (withBacklog) {
+    written.push(await putFile(token, owner, name, 'data/rounds/index.json', branch,
+      JSON.stringify(buildRawIndex(shoeFiles, publishedPaths, { generatedAt }), null, 1) + '\n',
+      message));
+  }
 
   const rawNew = rawWritten.filter((r) => !r.skipped).length;
 

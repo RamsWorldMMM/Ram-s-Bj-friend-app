@@ -666,7 +666,10 @@
 
   function publishNow(shoeNo) {
     say('Sending your play…');
-    fetch('/api/publish', { method: 'POST', credentials: 'same-origin' })
+    // backlog=0: the digests only. The raw-shoe archive is a backlog filled
+    // in behind him and writing a dozen 100 KB files turned an automatic
+    // send into half a minute. Send now still does both.
+    fetch('/api/publish?backlog=0', { method: 'POST', credentials: 'same-origin' })
       .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, status: r.status, b: b }; }); })
       .then(function (res) {
         /* 409 from the lock is not a failure. It means a send was already
