@@ -76,6 +76,19 @@ export function roundsOf(session) {
   return rounds;
 }
 
+/* Drop the cached parse.
+ *
+ * The cache exists to stop one session's log being parsed five times within a
+ * single pass. Once that pass is done the parsed graph is pure cost: it is tens
+ * of megabytes, it is module scope, so it stays resident for the life of the
+ * isolate, and the next request starts with that much less of its 128 MB. The
+ * publish loop calls this after each session so peak memory is one log, not
+ * one log plus whatever the last request happened to leave behind. */
+export function releaseRounds() {
+  lastSession = null;
+  lastRounds = null;
+}
+
 /** Flattens one stored session into export rows. */
 export function rowsForSession(session) {
   // Shares digest.js's per-session cache: the same blob was being parsed here

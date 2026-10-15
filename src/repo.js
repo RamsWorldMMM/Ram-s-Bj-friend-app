@@ -182,6 +182,20 @@ export async function loadBlobs(db, userId, ids) {
   return new Map((results ?? []).map((r) => [r.id, r]));
 }
 
+/* Store many fragments in ONE round trip.
+ *
+ * Saving them one at a time cost a subrequest each, and Cloudflare allows 50
+ * per request with D1 calls counting toward it — so a cold cache of 64 sessions
+ * could not save its work without running the request out of budget. d1.batch
+ * sends the lot as a single statement list. */
+export async function saveFragments(db, userId, rows) {
+  if (!rows || !rows.length) return;
+  const stmt = db.prepare(
+    'UPDATE sessions SET digest_cache_json = ?, digest_cache_at = ? WHERE id = ? AND user_id = ?',
+  );
+  await db.batch(rows.map((r) => stmt.bind(r.json, r.at, r.id, userId)));
+}
+
 /** Store a session's reduced form, stamped so staleness is decidable. */
 export async function saveFragment(db, userId, id, json, at) {
   await db.prepare(

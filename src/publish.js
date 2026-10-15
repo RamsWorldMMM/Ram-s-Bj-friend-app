@@ -14,6 +14,7 @@ import {
   fragmentIsCurrent, fragmentOf, shoeIndexFromFragments, buildShoeBody,
 } from './digest.js';
 import * as repo from './repo.js';
+import { releaseRounds } from './export.js';
 
 const API = 'https://api.github.com';
 
@@ -156,25 +157,50 @@ export async function publishDigests(env, userId, opts = {}) {
 
   const stale = sessions.filter((s) => !fragmentIsCurrent(s));
   if (stale.length) {
-    const blobs = await repo.loadBlobs(env.DB, userId, stale.map((s) => s.id));
     const stamp = new Date().toISOString();
-    for (const s of stale) {
-      const blob = blobs.get(s.id);
-      if (blob) { s.round_log_json = blob.round_log_json; s.state_json = blob.state_json; }
-      const fragment = buildSessionFragment(s);
-      s.digest_cache_json = JSON.stringify(fragment);
-      s.digest_cache_at = stamp;
-      // Written back so the next send does not pay for it again. Failure here
-      // costs speed, never correctness: a session with no usable cache is
-      // simply rebuilt next time.
-      try {
-        await repo.saveFragment(env.DB, userId, s.id, s.digest_cache_json, stamp);
-      } catch { /* the figures are already built; the cache is an optimisation */ }
-      // Let the blob go: holding 30 MB of parsed logs is what put the Worker
-      // over its memory ceiling before.
-      delete s.round_log_json;
-      delete s.state_json;
+    const rebuilt = [];
+    /* ONE SMALL GROUP OF ROUND LOGS RESIDENT AT A TIME.
+     *
+     * loadBlobs used to be handed every stale id in a single call, so a cold
+     * cache put all 64 round logs in memory together — about 30 MB of JSON, and
+     * several times that once parsed — and the Worker hit its 128 MB ceiling and
+     * returned 1102. The important part is what happened next: it died before a
+     * single fragment was written back, so the following send rebuilt exactly
+     * the same set and died in exactly the same place. Publishing did not
+     * degrade, it stopped, and stayed stopped.
+     *
+     * Measured on 64 sessions: 107 MB peak loading them together, against 42 MB
+     * in groups of four. The peak is now flat no matter how many are stale,
+     * which is what stops a cold cache being unrecoverable.
+     *
+     * Four at a time also keeps the D1 reads well inside the 50-subrequest
+     * budget — 16 reads for a full rebuild, against 64 one at a time. */
+    const GROUP = 4;
+    for (let i = 0; i < stale.length; i += GROUP) {
+      const group = stale.slice(i, i + GROUP);
+      const blobs = await repo.loadBlobs(env.DB, userId, group.map((s) => s.id));
+      for (const s of group) {
+        const blob = blobs.get(s.id);
+        if (blob) { s.round_log_json = blob.round_log_json; s.state_json = blob.state_json; }
+        s.digest_cache_json = JSON.stringify(buildSessionFragment(s));
+        s.digest_cache_at = stamp;
+        rebuilt.push({ id: s.id, json: s.digest_cache_json, at: stamp });
+        // Let the blob, and the parse of it held in export.js, go before the
+        // next session is loaded. Without the release the last log stays
+        // resident for the life of the isolate.
+        delete s.round_log_json;
+        delete s.state_json;
+        releaseRounds();
+      }
+      blobs.clear();
     }
+    /* Written back so the next send does not pay for it again — as one batch,
+     * because 64 separate UPDATEs would exhaust the subrequest budget on their
+     * own and leave nothing for the GitHub writes. Failure here costs speed,
+     * never correctness: a session with no usable cache is rebuilt next time. */
+    try {
+      await repo.saveFragments(env.DB, userId, rebuilt);
+    } catch { /* the figures are already built; the cache is an optimisation */ }
   }
   t0 = mark('fragments:' + stale.length, t0);
   const generatedAt = new Date().toISOString();
