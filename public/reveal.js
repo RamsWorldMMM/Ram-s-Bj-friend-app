@@ -1428,7 +1428,7 @@
    * leave it half empty. The three asked for are all here, with two smaller
    * rungs kept so a quiet shoe is still possible without typing.
    */
-  var MAIN_PRESETS = [100, 200, 400, 700, 1000, 1500];
+  var MAIN_PRESETS = [400, 700, 1500];
   var MAIN_STEP = 100;      // £50 was eleven taps from £400 to £1,000
 
   function installRaisedCaps() {
@@ -1470,10 +1470,22 @@
         // No data-preset-target on these: index.html's handler falls back to
         // 'main', so they are selected by their container instead.
         var btns = main.querySelectorAll('[data-preset]');
-        for (var i = 0; i < btns.length && i < MAIN_PRESETS.length; i++) {
-          btns[i].dataset.preset = String(MAIN_PRESETS[i]);
-          btns[i].textContent = '\u00a3' + MAIN_PRESETS[i].toLocaleString();
+        for (var i = 0; i < btns.length; i++) {
+          if (i < MAIN_PRESETS.length) {
+            btns[i].dataset.preset = String(MAIN_PRESETS[i]);
+            btns[i].textContent = '\u00a3' + MAIN_PRESETS[i].toLocaleString();
+            btns[i].classList.remove('hidden');
+          } else {
+            // The markup ships six buttons and index.html cannot be edited, so
+            // the surplus are hidden rather than removed — the engine's own
+            // click handler stays bound to exactly what it built.
+            btns[i].classList.add('hidden');
+          }
         }
+        // The row is a six-column grid (three on a phone). Three buttons in it
+        // would sit beside three empty columns, so tell it how many there are.
+        var row = main.querySelector('.preset-row');
+        if (row) row.classList.add('bjf-main-presets');
         main.querySelectorAll('[data-step]').forEach(function (b) {
           var up = Number(b.dataset.step) > 0;
           b.dataset.step = String(up ? MAIN_STEP : -MAIN_STEP);
