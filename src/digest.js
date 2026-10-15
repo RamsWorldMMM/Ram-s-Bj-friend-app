@@ -1030,11 +1030,14 @@ function stampKey(v) {
 
 /** Is this session's cached fragment still good? */
 export function fragmentIsCurrent(s) {
+  return fragmentIsCurrentWith(s, fragmentOf(s));
+}
+
+/** The same test, for a caller that has already parsed the fragment — which the
+ *  publish path has, and which saves parsing every one of them twice. */
+export function fragmentIsCurrentWith(s, f) {
   if (!s || !s.digest_cache_json || !s.digest_cache_at) return false;
-  try {
-    const f = JSON.parse(s.digest_cache_json);
-    if (!f || f.v !== FRAGMENT_VERSION) return false;
-  } catch { return false; }
+  if (!f || f.v !== FRAGMENT_VERSION) return false;
   // Rebuilt at or after the last write to the session.
   //
   // The two stamps are written in DIFFERENT formats and were compared as raw
