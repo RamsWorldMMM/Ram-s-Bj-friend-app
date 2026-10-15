@@ -251,7 +251,13 @@ async function route(request, env, ctx, url) {
     }
     publishInFlight = true;
     try {
-      const result = await publishDigests(env, user.id, { appVersion: '1.4.7' });
+      /* ?backlog=0 is the automatic send: digests only, so Ram is not waiting
+         half a minute between shoes. Send now does the archive too. */
+      const url2 = new URL(request.url);
+      const backlog = url2.searchParams.get('backlog') !== '0';
+      const result = await publishDigests(env, user.id, {
+        appVersion: '1.4.7', backlog,
+      });
       return json(result);
     } catch (err) {
       console.error('Publish failed:', err?.stack || err);

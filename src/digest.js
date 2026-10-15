@@ -857,6 +857,19 @@ export function buildSessionRaw(s, meta = {}) {
  *  the unit that reads whole. A session file runs to a megabyte; a shoe is
  *  around 100 KB, and a finished shoe never changes again. */
 export function buildRawShoeFiles(sessions, meta = {}) {
+  /* Which session is still being played. Only its shoes can still grow; every
+   * other session is finished and its files can never change again.
+   *
+   * This matters because shoe_ended is stamped BACKWARDS — a shoe is only known
+   * to have ended once the next one starts — so the last shoe of every finished
+   * session never gets the flag. That left 77 shoes across 61 sessions looking
+   * mutable, and the publish re-read the published ones on every single run.
+   */
+  const liveSession = sessions.reduce((newest, s) => (
+    !newest || String(s.updated_at || '') > String(newest.updated_at || '') ? s : newest
+  ), null);
+  const liveId = liveSession ? liveSession.id : null;
+
   const files = [];
   for (const s of sessions) {
     const raw = buildSessionRaw(s, meta);
@@ -875,9 +888,12 @@ export function buildRawShoeFiles(sessions, meta = {}) {
         shoe,
         rounds: rounds.length,
         startedAt: s.started_at,
-        // A shoe is complete once it has been reshuffled past; only the last
-        // shoe of the newest session can still grow.
-        complete: last.shoe_ended === 'reshuffle',
+        // Settled for good: either it was reshuffled past, or its session is no
+        // longer the one being played. Both mean the file cannot change again.
+        complete: last.shoe_ended === 'reshuffle' || s.id !== liveId,
+        // Kept apart so a reader can still tell a shoe played to the cut card
+        // from one that simply ended with the session.
+        played_to_cut_card: last.shoe_ended === 'reshuffle',
         // Built on demand. A publish writes about twenty of these but there are
         // hundreds; materialising every body up front is what put the Worker
         // over its memory ceiling.
@@ -928,6 +944,7 @@ export function buildRawIndex(files, writtenPaths, meta = {}) {
       rounds: f.rounds,
       started_at: f.startedAt,
       complete: f.complete,
+      played_to_cut_card: f.played_to_cut_card,
       published: written.has(f.path),
     })),
   };
