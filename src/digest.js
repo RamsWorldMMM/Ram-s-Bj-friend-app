@@ -1021,6 +1021,13 @@ export function buildSessionFragment(s) {
   };
 }
 
+/** "2026-10-15T09:09:25.123Z" and "2026-10-15 09:05:04" -> "2026-10-15 09:09:25".
+ *  Both stamps are UTC, so once they share a shape they sort chronologically. */
+function stampKey(v) {
+  if (!v) return '';
+  return String(v).replace('T', ' ').replace(/\.\d+/, '').replace(/Z$/, '').trim();
+}
+
 /** Is this session's cached fragment still good? */
 export function fragmentIsCurrent(s) {
   if (!s || !s.digest_cache_json || !s.digest_cache_at) return false;
@@ -1029,7 +1036,15 @@ export function fragmentIsCurrent(s) {
     if (!f || f.v !== FRAGMENT_VERSION) return false;
   } catch { return false; }
   // Rebuilt at or after the last write to the session.
-  return String(s.digest_cache_at) >= String(s.updated_at || '');
+  //
+  // The two stamps are written in DIFFERENT formats and were compared as raw
+  // strings. digest_cache_at is toISOString() -> "2026-10-15T09:09:25.123Z";
+  // updated_at is SQLite datetime('now') -> "2026-10-15 09:05:04". Character 10
+  // is "T" against a space, and "T" sorts higher, so on any given day the
+  // cache always looked newer than the session no matter what the clock said.
+  // A session played after its fragment was built therefore kept publishing its
+  // old figures until the date rolled over. Normalise, then compare.
+  return stampKey(s.digest_cache_at) >= stampKey(s.updated_at);
 }
 
 export function fragmentOf(s) {

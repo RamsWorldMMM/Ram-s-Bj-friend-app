@@ -7,7 +7,8 @@
  * preferentially on winning rounds. It survived into production and corrupted an
  * analysis before anyone noticed. Nothing here is theoretical.
  */
-import { rowsForSession, toCSV, caveatsFor, COLUMNS } from '../src/export.js';
+import { rowsForSession, toCSV, caveatsFor, COLUMNS, roundsOf, releaseRounds } from '../src/export.js';
+import { fragmentIsCurrent } from '../src/digest.js';
 
 let pass = 0, fail = 0;
 const eq = (name, actual, expected) => {
@@ -97,6 +98,43 @@ eq('no legacy warning when version is recorded', cav.some((c) => c.includes('pro
 const legacyCav = caveatsFor([{ ...session, strategy_version: null }]);
 eq('provenance gap flagged when version missing', legacyCav.some((c) => c.includes('provenance gap')), true);
 eq('never instructs a blanket exclusion', legacyCav.some((c) => /Exclude them from any/.test(c)), false);
+
+/* The fragment cache decides, per session, whether the published figures can be
+ * reused or must be rebuilt from the round log. It got that decision wrong in a
+ * way that was invisible: the two timestamps it compares are written in
+ * different formats — toISOString() for the cache, SQLite datetime('now') for
+ * the session — and character 10 is "T" against a space. "T" sorts higher, so
+ * for the whole of any given day the cache looked newer than the session
+ * however stale it actually was, and rounds played after a publish kept
+ * reporting the earlier figures until the date rolled over. */
+console.log('\nFRAGMENT STALENESS — the cache must not outrank a newer session');
+const frag = JSON.stringify({ v: 3, session_id: 's1', bets: [], shoes: [], deviations: [], report: null, mistake_rows: [] });
+const cached = (at, upd) => fragmentIsCurrent({ id: 's1', digest_cache_json: frag, digest_cache_at: at, updated_at: upd });
+
+eq('session written AFTER the cache is stale (same day)',
+   cached('2026-10-15T09:00:00.000Z', '2026-10-15 09:05:04'), false);
+eq('session written BEFORE the cache is current',
+   cached('2026-10-15T09:10:00.000Z', '2026-10-15 09:05:04'), true);
+eq('same second counts as current',
+   cached('2026-10-15T09:05:04.000Z', '2026-10-15 09:05:04'), true);
+eq('yesterday\'s cache against today\'s session is stale',
+   cached('2026-10-14T23:59:59.000Z', '2026-10-15 00:00:01'), false);
+eq('cache from a later day is current',
+   cached('2026-10-16T00:00:01.000Z', '2026-10-15 23:59:59'), true);
+eq('missing cache is stale', fragmentIsCurrent({ id: 's1' }), false);
+eq('wrong fragment version is stale',
+   fragmentIsCurrent({ id: 's1', digest_cache_json: JSON.stringify({ v: 1 }),
+                       digest_cache_at: '2026-10-15T09:10:00.000Z', updated_at: '2026-10-15 09:05:04' }), false);
+
+/* roundsOf caches the parsed log at module scope so one pass does not parse it
+ * five times. It is tens of megabytes, and the Worker has 128 MB, so the publish
+ * loop has to be able to put it down between sessions. */
+console.log('\nPARSE CACHE — must be releasable');
+const big = { id: 'b1', round_log_json: JSON.stringify([{ round: 1, boxes: [] }]) };
+eq('parses on first call', roundsOf(big).length, 1);
+eq('same object is served from cache', roundsOf(big) === roundsOf(big), true);
+releaseRounds();
+eq('release forces a fresh parse', roundsOf(big).length, 1);
 
 console.log(`\n${fail === 0 ? '✓ ALL PASS' : '✗ FAILURES'} — ${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);
