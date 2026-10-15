@@ -160,7 +160,11 @@ export async function exportSessionsLean(db, userId) {
                 start_bankroll, bankroll, main_pl, pairs_pl, trilux_pl, super_pl,
                 max_drawdown, total_main_staked, total_side_staked,
                 digest_cache_json, digest_cache_at,
-                (round_log_json IS NOT NULL) AS has_round_log`;
+                (round_log_meta IS NOT NULL) AS has_round_log`;
+  // round_log_meta, not round_log_json. Testing the blob for null makes D1 read
+  // the column — 1.59s against 0.74s for the same 64 rows — which defeats the
+  // whole point of a lean query. round_log_meta is written alongside the log and
+  // is a few bytes.
   const { results } = await db.prepare(
     `SELECT ${cols} FROM sessions WHERE user_id = ? ORDER BY started_at`,
   ).bind(userId).all();
