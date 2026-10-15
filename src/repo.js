@@ -145,6 +145,46 @@ export function listSessions(db, userId, limit = 50) {
  * Sessions for export. Only the columns the export needs, so a whole account's
  * round logs are not loaded twice.
  */
+/* The same rows WITHOUT the two large blobs.
+ *
+ * round_log_json and state_json are 30 MB across Ram's history and were being
+ * pulled on every publish to recompute figures that had been settled for weeks.
+ * The cached fragment carries what the digests need; this fetches that instead,
+ * plus a flag for whether a round log exists at all, which is the only thing
+ * summary.json wanted the blob for.
+ */
+export async function exportSessionsLean(db, userId) {
+  const cols = `id, started_at, updated_at, app_version, strategy_version,
+                rules_profile, mode, rounds, round_log_meta,
+                decisions, correct, mistakes_count,
+                start_bankroll, bankroll, main_pl, pairs_pl, trilux_pl, super_pl,
+                max_drawdown, total_main_staked, total_side_staked,
+                digest_cache_json, digest_cache_at,
+                (round_log_json IS NOT NULL) AS has_round_log`;
+  const { results } = await db.prepare(
+    `SELECT ${cols} FROM sessions WHERE user_id = ? ORDER BY started_at`,
+  ).bind(userId).all();
+  return results ?? [];
+}
+
+/** The blobs for specific sessions — only the ones that actually need rebuilding. */
+export async function loadBlobs(db, userId, ids) {
+  if (!ids || !ids.length) return new Map();
+  const marks = ids.map(() => '?').join(',');
+  const { results } = await db.prepare(
+    `SELECT id, round_log_json, state_json FROM sessions
+      WHERE user_id = ? AND id IN (${marks})`,
+  ).bind(userId, ...ids).all();
+  return new Map((results ?? []).map((r) => [r.id, r]));
+}
+
+/** Store a session's reduced form, stamped so staleness is decidable. */
+export async function saveFragment(db, userId, id, json, at) {
+  await db.prepare(
+    'UPDATE sessions SET digest_cache_json = ?, digest_cache_at = ? WHERE id = ? AND user_id = ?',
+  ).bind(json, at, id, userId).run();
+}
+
 export async function exportSessions(db, userId, sessionId) {
   // The per-session aggregates are here for src/digest.js, which summarises the
   // same rows. The CSV export ignores them; they are cheap scalars either way.

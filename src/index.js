@@ -256,7 +256,11 @@ async function route(request, env, ctx, url) {
       const url2 = new URL(request.url);
       const backlog = url2.searchParams.get('backlog') !== '0';
       const result = await publishDigests(env, user.id, {
-        appVersion: '1.4.7', backlog,
+        appVersion: '1.4.7',
+        backlog,
+        // Lets the archive finish after the reply has gone, so Ram is not
+        // waiting on fifteen seconds of raw-shoe writes he did not ask for.
+        waitUntil: (pr) => ctx.waitUntil(pr),
       });
       return json(result);
     } catch (err) {

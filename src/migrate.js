@@ -19,6 +19,13 @@ const REQUIRED_COLUMNS = [
   ['sessions',    'strategy_version', 'TEXT'],
   ['sessions',    'rules_profile',    'TEXT'],
   ['ai_analyses', 'prompt_version',   'TEXT'],
+  /* A finished session's contribution to the digests never changes, but it was
+     being recomputed from its round log on every publish — 37 MB of JSON read
+     from D1 and parsed five times over, for data that had been settled for
+     weeks. These hold the reduced form per session, so a publish reads the
+     round log of the session still being played and nothing else. */
+  ['sessions',    'digest_cache_json', 'TEXT'],
+  ['sessions',    'digest_cache_at',   'TEXT'],
 ];
 
 let settled = false;          // per-isolate: reconcile once, not per request
