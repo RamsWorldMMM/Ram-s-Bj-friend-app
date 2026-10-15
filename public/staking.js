@@ -664,13 +664,36 @@
     note.classList.remove('hidden');
   }
 
+  /* One quiet retry.
+   *
+   * Fifteen automatic sends in a row gave fourteen successes and one 503 — the
+   * free plan's CPU ceiling, hit when a send lands on an isolate already busy.
+   * It is transient by nature: the same request a moment later succeeds. Ram
+   * does not need to see a failure he cannot act on and that fixes itself, so
+   * the first is retried silently and only a second failure is reported.
+   *
+   * A 409 is never retried: it means another send is already running, which is
+   * a reason not to send again rather than a reason to insist. */
+  function sendOnce() {
+    return fetch('/api/publish?backlog=0', { method: 'POST', credentials: 'same-origin' })
+      .then(function (r) {
+        return r.json()
+          .catch(function () { return {}; })      // a 1102 answers with plain text
+          .then(function (b) { return { ok: r.ok, status: r.status, b: b }; });
+      });
+  }
+
   function publishNow(shoeNo) {
     say('Sending your play…');
     // backlog=0: the digests only. The raw-shoe archive is a backlog filled
     // in behind him and writing a dozen 100 KB files turned an automatic
     // send into half a minute. Send now still does both.
-    fetch('/api/publish?backlog=0', { method: 'POST', credentials: 'same-origin' })
-      .then(function (r) { return r.json().then(function (b) { return { ok: r.ok, status: r.status, b: b }; }); })
+    sendOnce()
+      .then(function (res) {
+        // Retry once on a server-side blip, never on 409.
+        if (res.ok || res.status === 409) return res;
+        return new Promise(function (go) { setTimeout(go, 1200); }).then(sendOnce);
+      })
       .then(function (res) {
         /* 409 from the lock is not a failure. It means a send was already
            running — the shoe-end publish and a press of Send now, or two shoe

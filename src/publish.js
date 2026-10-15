@@ -264,6 +264,9 @@ export async function publishDigests(env, userId, opts = {}) {
    * and the index on the repository remains the record of what is actually
    * there, so the next run sees the truth whatever happened here. */
   const defer = typeof opts.waitUntil === 'function' ? opts.waitUntil : null;
+  // No deferral offered means a drain is already running elsewhere; skip the
+  // archive this time rather than doing it inline and making Ram wait.
+  const canDrain = withBacklog && (defer !== null || opts.waitUntil === undefined);
 
   const SUBREQUEST_LIMIT = 50;
   // auth, two PRAGMAs on a cold isolate, exportSessions, then a read and a
@@ -330,7 +333,7 @@ export async function publishDigests(env, userId, opts = {}) {
    * the repository can never change, so it is skipped without a read; what is
    * left is the queue, oldest first. Only then are the round logs fetched, and
    * only for the sessions those shoes belong to — a handful, not all 64. */
-  const due = withBacklog
+  const due = canDrain
     ? shoeFiles.filter((f) => !(alreadyDone.has(f.path) && f.complete)).slice(0, MAX_SHOE_WRITES)
     : [];
   const dueBlobs = due.length
@@ -368,7 +371,7 @@ export async function publishDigests(env, userId, opts = {}) {
   }
   };
 
-  if (withBacklog) {
+  if (canDrain) {
     if (defer) defer(drain().catch((e) => console.error('archive drain failed:', e)));
     else await drain();
   }
