@@ -11,7 +11,7 @@
 
 import {
   buildRawIndex, buildSessionFragment, buildAllFromFragments,
-  fragmentIsCurrent, fragmentOf, shoeIndexFromFragments, buildShoeBody,
+  fragmentIsCurrentWith, fragmentOf, shoeIndexFromFragments, buildShoeBody,
 } from './digest.js';
 import * as repo from './repo.js';
 import { releaseRounds } from './export.js';
@@ -59,8 +59,15 @@ async function currentFile(token, owner, name, path, branch, decode = true) {
   let text = null;
   try {
     if (decode && body.content && body.encoding === 'base64') {
+      /* A plain loop, not Uint8Array.from(bin, cb).
+       *
+       * The callback form invokes the function once per BYTE — about 300,000
+       * calls across the six digests, measured at 19.6 ms against 1.1 ms for
+       * this loop on the same files, and the Worker's CPU budget is the thing
+       * that was killing the send. */
       const bin = atob(body.content.replace(/\n/g, ''));
-      const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
       text = new TextDecoder().decode(bytes);
     }
   } catch { text = null; }
@@ -71,16 +78,20 @@ async function currentFile(token, owner, name, path, branch, decode = true) {
  * ever byte-identical and "skip the unchanged" could never fire. Comparing with
  * that field removed is what makes it work: press the button twice having played
  * nothing and the second press writes no commits at all. */
+/* The stamp sits at the top level of a file written with one-space indent, so
+ * it is always its own line beginning with exactly one space. Cutting that line
+ * out of both strings compares the same thing as parsing both, deleting the
+ * field and re-serialising — and does not parse 600 KB of JSON to do it: 1.9 ms
+ * against 0.3 ms, checked to agree with the old form on all six real files,
+ * including a timestamp-only change and a real one.
+ *
+ * If a file ever arrives formatted differently the regex simply will not match,
+ * the strings differ, and it is written — the safe direction to fail in. */
+const GENERATED_AT_LINE = /^ "generated_at": (?:"[^"]*"|null),?\r?\n/m;
+
 function sameIgnoringTimestamp(a, b) {
   if (a === null || b === null) return false;
-  try {
-    const strip = (t) => {
-      const o = JSON.parse(t);
-      delete o.generated_at;
-      return JSON.stringify(o);
-    };
-    return strip(a) === strip(b);
-  } catch { return false; }
+  return a.replace(GENERATED_AT_LINE, '') === b.replace(GENERATED_AT_LINE, '');
 }
 
 /* A 409 means the file moved between our read and our write — the sha we sent
@@ -155,7 +166,12 @@ export async function publishDigests(env, userId, opts = {}) {
   const sessions = await repo.exportSessionsLean(env.DB, userId);
   t0 = mark('d1-lean', t0);
 
-  const stale = sessions.filter((s) => !fragmentIsCurrent(s));
+  /* Parse each cached fragment ONCE. fragmentIsCurrent parsed all 64 to read a
+   * version field and fragmentOf parsed all 64 again to use them — 2.2 MB of
+   * JSON through the parser per send to look at 1.1 MB. */
+  const frags = sessions.map((s) => fragmentOf(s));
+  const indexOfId = new Map(sessions.map((s, i) => [s.id, i]));
+  const stale = sessions.filter((s, i) => !fragmentIsCurrentWith(s, frags[i]));
   if (stale.length) {
     const stamp = new Date().toISOString();
     const rebuilt = [];
@@ -185,6 +201,7 @@ export async function publishDigests(env, userId, opts = {}) {
         s.digest_cache_json = JSON.stringify(buildSessionFragment(s));
         s.digest_cache_at = stamp;
         rebuilt.push({ id: s.id, json: s.digest_cache_json, at: stamp });
+        frags[indexOfId.get(s.id)] = fragmentOf(s);   // the freshly built one
         // Let the blob, and the parse of it held in export.js, go before the
         // next session is loaded. Without the release the last log stays
         // resident for the life of the isolate.
@@ -204,7 +221,6 @@ export async function publishDigests(env, userId, opts = {}) {
   }
   t0 = mark('fragments:' + stale.length, t0);
   const generatedAt = new Date().toISOString();
-  const frags = sessions.map((s) => fragmentOf(s));
   const built = buildAllFromFragments(sessions, frags, {
     generatedAt, appVersion: opts.appVersion,
   });
