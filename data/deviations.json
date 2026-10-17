@@ -1,18 +1,18 @@
 {
  "what_this_is": "Every departure from basic strategy, one record each, with what was possible at the time and whether the choice changed the order of the cards that followed.",
- "generated_at": "2026-10-17T03:52:46.704Z",
+ "generated_at": "2026-10-17T04:18:06.323Z",
  "read_this_first": [
   "shoe_effect decides what can be said about cost. \"neutral\" means the correct play would have used the same number of cards, so the difference is exact arithmetic. \"changed\" means every card after it moved, so the cost is permanently unknowable — do not estimate one.",
   "forced_by_bankroll true means the correct play was unaffordable at that moment. That is not a mistake in judgement.",
   "Intent — deliberate or accidental — is not recorded and cannot be inferred from the action. Only Ram can say.",
-  "59 of 107 deviations predate the capture of bankroll and legality, so those fields are null — unknown, not false."
+  "59 of 108 deviations predate the capture of bankroll and legality, so those fields are null — unknown, not false."
  ],
  "totals": {
-  "deviations": 107,
+  "deviations": 108,
   "forced_by_bankroll": 0,
   "affordability_unknown": 19,
   "shoe_neutral": 21,
-  "shoe_changed": 44,
+  "shoe_changed": 45,
   "effect_not_determinable": 42,
   "without_decision_context": 59
  },
@@ -448,6 +448,30 @@
    "hand_result": "Lost — player bust",
    "hand_net": -1000,
    "dealer_total": 21
+  },
+  {
+   "session_id": "34908ecb-9069-430a-b3e7-9fa5202ea379",
+   "round": 61,
+   "box": 2,
+   "hand_index": 0,
+   "shoe": 1,
+   "position_in_shoe": 5,
+   "cards_remaining_at_decision": 222,
+   "hand": "J♥ 5♦",
+   "dealer_card": "6♥",
+   "chose": "Hit",
+   "correct_play": "Stand",
+   "cards_consumed": 1,
+   "correct_play_would_consume": 0,
+   "shoe_effect": "changed",
+   "bankroll_available": 116450,
+   "hand_bet": 700,
+   "could_double": true,
+   "could_split": false,
+   "forced_by_bankroll": false,
+   "hand_result": "Lost — player bust",
+   "hand_net": -700,
+   "dealer_total": 19
   },
   {
    "session_id": "3640fe30-c4c3-4900-8c08-74f951b7e52c",
