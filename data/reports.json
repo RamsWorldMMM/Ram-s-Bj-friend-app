@@ -1,6 +1,6 @@
 {
  "what_this_is": "The per-session report, one entry per session — the detail that only means anything inside a single session.",
- "generated_at": "2026-10-16T17:02:43.229Z",
+ "generated_at": "2026-10-17T03:52:46.704Z",
  "read_this_first": [
   "decision_mix is what he was dealt and what he chose, not what was correct.",
   "mistakes_detail lists each mistake separately, unlike mistakes.json which groups them into repeating patterns.",
@@ -4524,6 +4524,82 @@
      "dealer_card": "J♣",
      "chose": "Stand",
      "correct_play": "Hit"
+    }
+   ]
+  },
+  {
+   "session_id": "622b6875-bdaf-40c7-b3de-c23f023bb80f",
+   "started_at": "2026-10-17 03:51:23",
+   "rounds": 181,
+   "decisions": 548,
+   "correct": 546,
+   "mistakes": 2,
+   "accuracy_pct": 99.6,
+   "decision_mix": {
+    "hard_hands": 457,
+    "soft_hands": 62,
+    "pairs": 29,
+    "hit": 262,
+    "stand": 236,
+    "double": 41,
+    "split": 9
+   },
+   "box_performance": [
+    {
+     "box": 1,
+     "decisions": 266,
+     "correct": 266,
+     "accuracy_pct": 100,
+     "main_pl": 15000
+    },
+    {
+     "box": 2,
+     "decisions": 222,
+     "correct": 220,
+     "accuracy_pct": 99.1,
+     "main_pl": 31500
+    },
+    {
+     "box": 3,
+     "decisions": 60,
+     "correct": 60,
+     "accuracy_pct": 100,
+     "main_pl": 1100
+    }
+   ],
+   "streaks": {
+    "longest_winning_rounds": 7,
+    "longest_losing_rounds": 9
+   },
+   "largest_main_wager": 2000,
+   "bankroll": {
+    "start": 40000,
+    "end": 63950,
+    "highest": 79750,
+    "lowest": 26950,
+    "range": 52800,
+    "max_drawdown": 46850
+   },
+   "side_bet_share_of_stakes_pct": 29.3,
+   "mistakes_listed": 2,
+   "mistakes_detail": [
+    {
+     "round": 171,
+     "box": 2,
+     "hand": "A♥ 6♦",
+     "hand_value": "Soft 17",
+     "dealer_card": "2♣",
+     "chose": "Double",
+     "correct_play": "Hit"
+    },
+    {
+     "round": 174,
+     "box": 2,
+     "hand": "7♠ 4♦",
+     "hand_value": "Hard 11",
+     "dealer_card": "8♠",
+     "chose": "Hit",
+     "correct_play": "Double"
     }
    ]
   }
