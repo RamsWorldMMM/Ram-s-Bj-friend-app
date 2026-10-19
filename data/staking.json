@@ -1,6 +1,6 @@
 {
  "what_this_is": "Did varying the Pairs, Trilux and Trilux Super stakes improve profit or reduce drawdown, compared with the same cards played at a flat stake? Money is pounds. Each product is reported separately.",
- "generated_at": "2026-10-19T10:21:28.614Z",
+ "generated_at": "2026-10-19T20:12:17.930Z",
  "read_this_first": [
   "A side bet is settled from the dealt cards alone, before any player decision and without reference to the stake. So the counterfactual is exact arithmetic on the same cards, not a simulation — nothing is reshuffled and no outcome changes.",
   "Compare varying against flat_at_same_average, NOT against flat_5 or flat_10. Those are smaller bets, so they lose less for a reason that has nothing to do with varying. Only the same-average comparison isolates the effect of moving the stake around.",
@@ -8,285 +8,285 @@
   "Check concentration before trusting any product. Where a handful of wins carry most of the return, a single 270-to-1 card decides the figures."
  ],
  "combined": {
-  "bets_placed": 90425,
-  "total_staked": 6336420,
-  "average_stake": 70.07,
+  "bets_placed": 90764,
+  "total_staked": 6388020,
+  "average_stake": 70.38,
   "varying_stakes": {
-   "pl": 1038040,
+   "pl": 1038340,
    "max_drawdown": 246150,
    "worst_point": -235410
   },
   "flat_at_same_average": {
-   "pl": -331098.53,
-   "max_drawdown": 352260.81,
-   "worst_point": -331729.19
+   "pl": -336137.49,
+   "max_drawdown": 356758.99,
+   "worst_point": -336137.49
   },
   "flat_5": {
-   "pl": -23625,
-   "max_drawdown": 25135,
-   "worst_point": -23670
+   "pl": -23880,
+   "max_drawdown": 25345,
+   "worst_point": -23880
   },
   "flat_10": {
-   "pl": -47250,
-   "max_drawdown": 50270,
-   "worst_point": -47340
+   "pl": -47760,
+   "max_drawdown": 50690,
+   "worst_point": -47760
   },
   "flat_25": {
-   "pl": -118125,
-   "max_drawdown": 125675,
-   "worst_point": -118350
+   "pl": -119400,
+   "max_drawdown": 126725,
+   "worst_point": -119400
   },
-  "varying_gained_pl": 1369138.53,
-  "varying_added_drawdown": -106110.81
+  "varying_gained_pl": 1374477.49,
+  "varying_added_drawdown": -110608.99
  },
  "products": [
   {
    "product": "Pairs",
-   "bets_placed": 30142,
-   "total_staked": 2130450,
-   "total_returned": 2300790,
-   "net_pl": 170340,
-   "roi_pct": 8,
+   "bets_placed": 30255,
+   "total_staked": 2147650,
+   "total_returned": 2305390,
+   "net_pl": 157740,
+   "roi_pct": 7.3,
    "wager": {
-    "average": 70.68,
+    "average": 70.98,
     "min": 10,
     "max": 400
    },
    "peak_profit": 173940,
    "max_drawdown": 71160,
    "stake_changes": {
-    "raised": 3201,
-    "lowered": 2731,
-    "held": 24207,
-    "average_rise": 39.83,
-    "average_fall": 46.49
+    "raised": 3213,
+    "lowered": 2743,
+    "held": 24296,
+    "average_rise": 40.05,
+    "average_fall": 46.72
    },
    "after_a_stake_change": {
     "raised": {
-     "bets": 3201,
-     "staked": 318645,
-     "net": 512195,
-     "roi_pct": 160.7
+     "bets": 3213,
+     "staked": 321045,
+     "net": 513195,
+     "roi_pct": 159.9
     },
     "held": {
-     "bets": 24207,
-     "staked": 1647110,
-     "net": -285495,
-     "roi_pct": -17.3
+     "bets": 24296,
+     "staked": 1660710,
+     "net": -297895,
+     "roi_pct": -17.9
     },
     "lowered": {
-     "bets": 2731,
-     "staked": 164620,
-     "net": -56285,
-     "roi_pct": -34.2
+     "bets": 2743,
+     "staked": 165820,
+     "net": -57485,
+     "roi_pct": -34.7
     }
    },
    "counterfactual": {
     "varying_stakes": {
-     "pl": 170340,
+     "pl": 157740,
      "max_drawdown": 71160,
      "worst_point": -66560
     },
     "flat_at_same_average": {
-     "pl": -92167.3,
-     "max_drawdown": 120580.84,
-     "worst_point": -107575.64
+     "pl": -98953.04,
+     "max_drawdown": 121100.34,
+     "worst_point": -108039.11
     },
     "flat_5": {
-     "pl": -6520,
+     "pl": -6970,
      "max_drawdown": 8530,
      "worst_point": -7610
     },
     "flat_10": {
-     "pl": -13040,
+     "pl": -13940,
      "max_drawdown": 17060,
      "worst_point": -15220
     },
     "flat_25": {
-     "pl": -32600,
+     "pl": -34850,
      "max_drawdown": 42650,
      "worst_point": -38050
     },
-    "varying_gained_pl": 262507.3,
-    "varying_added_drawdown": -49420.84
+    "varying_gained_pl": 256693.04,
+    "varying_added_drawdown": -49940.34
    },
    "luck_test": {
     "p": 0,
-    "z": 7.38,
-    "null_mean": -92167.3,
-    "null_sd": 35564.92,
+    "z": 7.18,
+    "null_mean": -98953.04,
+    "null_sd": 35770.71,
     "method": "exact permutation moments, normal approximation"
    },
    "concentration": {
-    "winning_bets": 2288,
+    "winning_bets": 2291,
     "biggest_win_share_pct": 0.4,
     "top_5_share_pct": 1.8
    }
   },
   {
    "product": "Trilux",
-   "bets_placed": 30143,
-   "total_staked": 2127040,
-   "total_returned": 2287505,
-   "net_pl": 160465,
-   "roi_pct": 7.5,
+   "bets_placed": 30256,
+   "total_staked": 2144240,
+   "total_returned": 2316605,
+   "net_pl": 172365,
+   "roi_pct": 8,
    "wager": {
-    "average": 70.56,
+    "average": 70.87,
     "min": 10,
     "max": 400
    },
    "peak_profit": 175165,
    "max_drawdown": 80850,
    "stake_changes": {
-    "raised": 3151,
-    "lowered": 2682,
-    "held": 24307,
-    "average_rise": 40.09,
-    "average_fall": 46.91
+    "raised": 3163,
+    "lowered": 2694,
+    "held": 24396,
+    "average_rise": 40.32,
+    "average_fall": 47.15
    },
    "after_a_stake_change": {
     "raised": {
-     "bets": 3151,
-     "staked": 316330,
-     "net": 463975,
-     "roi_pct": 146.7
+     "bets": 3163,
+     "staked": 318730,
+     "net": 473375,
+     "roi_pct": 148.5
     },
     "held": {
-     "bets": 24307,
-     "staked": 1647695,
-     "net": -267045,
-     "roi_pct": -16.2
+     "bets": 24396,
+     "staked": 1661295,
+     "net": -265045,
+     "roi_pct": -16
     },
     "lowered": {
-     "bets": 2682,
-     "staked": 162940,
-     "net": -36390,
-     "roi_pct": -22.3
+     "bets": 2694,
+     "staked": 164140,
+     "net": -35890,
+     "roi_pct": -21.9
     }
    },
    "counterfactual": {
     "varying_stakes": {
-     "pl": 160465,
+     "pl": 172365,
      "max_drawdown": 80850,
      "worst_point": -79635
     },
     "flat_at_same_average": {
-     "pl": -125182.26,
-     "max_drawdown": 128287.12,
-     "worst_point": -125887.91
+     "pl": -121400.16,
+     "max_drawdown": 128912.37,
+     "worst_point": -126502.79
     },
     "flat_5": {
-     "pl": -8870,
-     "max_drawdown": 9090,
-     "worst_point": -8920
+     "pl": -8565,
+     "max_drawdown": 9095,
+     "worst_point": -8925
     },
     "flat_10": {
-     "pl": -17740,
-     "max_drawdown": 18180,
-     "worst_point": -17840
+     "pl": -17130,
+     "max_drawdown": 18190,
+     "worst_point": -17850
     },
     "flat_25": {
-     "pl": -44350,
-     "max_drawdown": 45450,
-     "worst_point": -44600
+     "pl": -42825,
+     "max_drawdown": 45475,
+     "worst_point": -44625
     },
-    "varying_gained_pl": 285647.26,
-    "varying_added_drawdown": -47437.12
+    "varying_gained_pl": 293765.16,
+    "varying_added_drawdown": -48062.37
    },
    "luck_test": {
     "p": 0,
-    "z": 9.04,
-    "null_mean": -125182.26,
-    "null_sd": 31614.94,
+    "z": 9.22,
+    "null_mean": -121400.16,
+    "null_sd": 31863.17,
     "method": "exact permutation moments, normal approximation"
    },
    "concentration": {
-    "winning_bets": 2879,
+    "winning_bets": 2898,
     "biggest_win_share_pct": 1.2,
-    "top_5_share_pct": 4.3
+    "top_5_share_pct": 4.2
    }
   },
   {
    "product": "Trilux Super",
-   "bets_placed": 30140,
-   "total_staked": 2078930,
-   "total_returned": 2786165,
-   "net_pl": 707235,
-   "roi_pct": 34,
+   "bets_placed": 30253,
+   "total_staked": 2096130,
+   "total_returned": 2804365,
+   "net_pl": 708235,
+   "roi_pct": 33.8,
    "wager": {
-    "average": 68.98,
+    "average": 69.29,
     "min": 10,
     "max": 400
    },
    "peak_profit": 752235,
    "max_drawdown": 110710,
    "stake_changes": {
-    "raised": 3008,
-    "lowered": 2619,
-    "held": 24510,
-    "average_rise": 39.27,
-    "average_fall": 44.9
+    "raised": 3020,
+    "lowered": 2631,
+    "held": 24599,
+    "average_rise": 39.51,
+    "average_fall": 45.15
    },
    "after_a_stake_change": {
     "raised": {
-     "bets": 3008,
-     "staked": 289125,
-     "net": 1534825,
-     "roi_pct": 530.9
+     "bets": 3020,
+     "staked": 291525,
+     "net": 1550625,
+     "roi_pct": 531.9
     },
     "held": {
-     "bets": 24510,
-     "staked": 1636685,
-     "net": -736200,
-     "roi_pct": -45
+     "bets": 24599,
+     "staked": 1650285,
+     "net": -749800,
+     "roi_pct": -45.4
     },
     "lowered": {
-     "bets": 2619,
-     "staked": 153045,
-     "net": -91315,
-     "roi_pct": -59.7
+     "bets": 2631,
+     "staked": 154245,
+     "net": -92515,
+     "roi_pct": -60
     }
    },
    "counterfactual": {
     "varying_stakes": {
-     "pl": 707235,
+     "pl": 708235,
      "max_drawdown": 110710,
      "worst_point": -89815
     },
     "flat_at_same_average": {
-     "pl": -113603.11,
-     "max_drawdown": 154367.79,
-     "worst_point": -113603.11
+     "pl": -115639.47,
+     "max_drawdown": 156587.9,
+     "worst_point": -115639.47
     },
     "flat_5": {
-     "pl": -8235,
-     "max_drawdown": 11190,
-     "worst_point": -8235
+     "pl": -8345,
+     "max_drawdown": 11300,
+     "worst_point": -8345
     },
     "flat_10": {
-     "pl": -16470,
-     "max_drawdown": 22380,
-     "worst_point": -16470
+     "pl": -16690,
+     "max_drawdown": 22600,
+     "worst_point": -16690
     },
     "flat_25": {
-     "pl": -41175,
-     "max_drawdown": 55950,
-     "worst_point": -41175
+     "pl": -41725,
+     "max_drawdown": 56500,
+     "worst_point": -41725
     },
-    "varying_gained_pl": 820838.11,
-    "varying_added_drawdown": -43657.79
+    "varying_gained_pl": 823874.47,
+    "varying_added_drawdown": -45877.9
    },
    "luck_test": {
     "p": 0,
-    "z": 8.82,
-    "null_mean": -113603.11,
-    "null_sd": 93092.79,
+    "z": 8.79,
+    "null_mean": -115639.47,
+    "null_sd": 93769.81,
     "method": "exact permutation moments, normal approximation"
    },
    "concentration": {
-    "winning_bets": 233,
+    "winning_bets": 234,
     "biggest_win_share_pct": 2.4,
-    "top_5_share_pct": 9.6
+    "top_5_share_pct": 9.5
    }
   }
  ]
