@@ -1,19 +1,19 @@
 {
  "what_this_is": "Every departure from basic strategy, one record each, with what was possible at the time and whether the choice changed the order of the cards that followed.",
- "generated_at": "2026-10-20T06:02:25.442Z",
+ "generated_at": "2026-10-20T09:24:16.145Z",
  "read_this_first": [
   "shoe_effect decides what can be said about cost. \"neutral\" means the correct play would have used the same number of cards, so the difference is exact arithmetic. \"changed\" means every card after it moved, so the cost is permanently unknowable — do not estimate one.",
   "forced_by_bankroll true means the correct play was unaffordable at that moment. That is not a mistake in judgement.",
   "Intent — deliberate or accidental — is not recorded and cannot be inferred from the action. Only Ram can say.",
-  "59 of 115 deviations predate the capture of bankroll and legality, so those fields are null — unknown, not false."
+  "59 of 116 deviations predate the capture of bankroll and legality, so those fields are null — unknown, not false."
  ],
  "totals": {
-  "deviations": 115,
+  "deviations": 116,
   "forced_by_bankroll": 0,
   "affordability_unknown": 19,
   "shoe_neutral": 21,
   "shoe_changed": 48,
-  "effect_not_determinable": 46,
+  "effect_not_determinable": 47,
   "without_decision_context": 59
  },
  "deviations": [
@@ -1864,6 +1864,30 @@
    "hand_result": "Won — dealer bust",
    "hand_net": 400,
    "dealer_total": 24
+  },
+  {
+   "session_id": "a3ca1f0c-9463-4978-968a-9fa290f66ba4",
+   "round": 247,
+   "box": 2,
+   "hand_index": 0,
+   "shoe": 1,
+   "position_in_shoe": 4,
+   "cards_remaining_at_decision": 156,
+   "hand": "5♠ 6♣ A♣",
+   "dealer_card": "Q♦",
+   "chose": "Stand",
+   "correct_play": "Hit",
+   "cards_consumed": 0,
+   "correct_play_would_consume": null,
+   "shoe_effect": "not determinable",
+   "bankroll_available": 103800,
+   "hand_bet": 1500,
+   "could_double": false,
+   "could_split": false,
+   "forced_by_bankroll": false,
+   "hand_result": "Lost",
+   "hand_net": -1500,
+   "dealer_total": 20
   },
   {
    "session_id": "bed3c195-5bcf-4ac0-9cdd-3e11e18712b5",
