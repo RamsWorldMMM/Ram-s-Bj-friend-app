@@ -1367,6 +1367,19 @@
     } catch (e) { /* the session report stands without it */ }
   }
 
+  /* The release notes, loaded the same way and for the same reason: a deploy
+     used to land silently, and index.html is not the place to say otherwise. */
+  function loadWhatsNew() {
+    try {
+      if (document.getElementById('bjfWhatsNewJs')) return;
+      var sc = document.createElement('script');
+      sc.id = 'bjfWhatsNewJs';
+      sc.src = '/whatsnew.js';
+      sc.defer = true;
+      document.head.appendChild(sc);
+    } catch (e) { /* the table plays the same without it */ }
+  }
+
   /* SIDE-BET QUICK AMOUNTS
    *
    * Ram stakes £50-£150 a side now, but the quick buttons still offered
@@ -1561,6 +1574,7 @@
   function boot() {
     scheduleFreshStart();
     loadStakingPanel();
+    loadWhatsNew();
     installRaisedCaps();
     installSidePresets();
     injectStyles();
