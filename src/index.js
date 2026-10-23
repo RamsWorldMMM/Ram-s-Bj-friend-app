@@ -102,7 +102,7 @@ async function route(request, env, ctx, url) {
       ok: schema.ok,
       llm: env.MOCK_LLM === '1' ? 'mock' : 'vertex-ai',
       model: env.VERTEX_MODEL || 'gemini-2.5-flash',
-      appVersion: '1.4.7',
+      appVersion: '1.4.8',
       schema,
     });
   }
@@ -227,7 +227,7 @@ async function route(request, env, ctx, url) {
   if (path === '/api/digests' && method === 'GET') {
     const sessions = await repo.exportSessions(env.DB, user.id, null);
     const generatedAt = new Date().toISOString();
-    const digests = buildDigests(sessions, { generatedAt, appVersion: '1.4.7' });
+    const digests = buildDigests(sessions, { generatedAt, appVersion: '1.4.8' });
     // Everything the publish button writes, so what will be published can be
     // inspected without publishing it.
     return json({
@@ -276,7 +276,7 @@ async function route(request, env, ctx, url) {
       const url2 = new URL(request.url);
       const backlog = url2.searchParams.get('backlog') !== '0';
       const result = await publishDigests(env, user.id, {
-        appVersion: '1.4.7',
+        appVersion: '1.4.8',
         backlog,
         // Lets the archive finish after the reply has gone, so Ram is not
         // waiting on fifteen seconds of raw-shoe writes he did not ask for.
