@@ -626,16 +626,25 @@ function dealerPlay(){
   // one non-busted player hand still requires settlement. If every hand has
   // busted, the dealer keeps the first card and consumes no additional cards.
   const needsDealerResolution=state.boxes.some(box=>box.hands.some(hand=>handTotal(hand.cards).total<=21));
-  if(needsDealerResolution){
+  // A live hand that is NOT an unsplit natural still has to be beaten, so the
+  // dealer has to complete the hand against it.
+  const needsCompletion=state.boxes.some(box=>box.hands.some(hand=>
+    handTotal(hand.cards).total<=21&&!(isBlackjack(hand.cards)&&!hand.isSplit)));
+  // The dealer's second card exists only to answer the natural question, and
+  // behind anything but an Ace or a ten the answer is already no. So a table of
+  // naturals against a 5 is simply paid and the dealer turns no card at all,
+  // which is what a live dealer does. Taking one anyway burned a shoe card a
+  // real table would never have spent, moving penetration and the running count
+  // away from the game being practised: 34 times in 3,671 recorded rounds.
+  //
+  // Ten-VALUE, not "picture": a plain 10 makes a natural exactly as a King does.
+  // Reading it as pictures-only would skip the draw behind a 10 and settle the
+  // 17 real dealer blackjacks in those same rounds as player wins instead.
+  const upcardCouldBeNatural=state.dealer.length>0
+    &&(state.dealer[0].r==='A'||rankValue(state.dealer[0].r)===10);
+  if(needsDealerResolution&&(needsCompletion||upcardCouldBeNatural)){
     state.dealer.push(draw());
     const dealerBJ=isBlackjack(state.dealer);
-    // The dealer's second card exists only to answer the natural question.
-    // A player natural is already decided once the dealer is shown not to hold
-    // one, so the dealer completes the hand only when a live NON-natural hand
-    // still has to be beaten. Drawing beyond that burns shoe cards that a real
-    // dealer would never take, distorting penetration and the running count.
-    const needsCompletion=state.boxes.some(box=>box.hands.some(hand=>
-      handTotal(hand.cards).total<=21&&!(isBlackjack(hand.cards)&&!hand.isSplit)));
     if(!dealerBJ&&needsCompletion){
       while(handTotal(state.dealer).total<17)state.dealer.push(draw());
     }
