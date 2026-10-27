@@ -12,7 +12,7 @@
     "db:migrate:remote": "wrangler d1 execute rams-bj-friend --remote --file=./schema.sql",
     "user:create": "node scripts/create-user.mjs",
     "tail": "wrangler tail",
-    "test": "node tests/export.test.mjs",
+    "test": "node tests/export.test.mjs && node tests/dealer.test.mjs && node --no-warnings tests/sync.test.mjs && node --no-warnings tests/publish.test.mjs",
     "test:browser": "node tests/strategy.test.mjs"
   },
   "devDependencies": {

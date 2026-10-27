@@ -13,7 +13,7 @@
  *     stated plainly rather than left to be inferred
  */
 
-import { rowsForSession, roundsOf } from './export.js';
+import { rowsForSession, roundsOf, hasRoundLog } from './export.js';
 
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -49,7 +49,7 @@ function sessionRows(sessions) {
       total_main_staked: round2(s.total_main_staked),
       total_side_staked: round2(s.total_side_staked),
       // Lean rows carry a flag instead of the blob; full rows carry the blob.
-      has_round_detail: Boolean(s.round_log_json) || Boolean(s.has_round_log),
+      has_round_detail: hasRoundLog(s) || Boolean(s.has_round_log),
     };
   }).sort((a, b) => String(a.started_at || '').localeCompare(String(b.started_at || '')));
 }
@@ -203,7 +203,7 @@ function shoeRowsFor(s, rounds) {
 /** The two files, ready to write. */
 export function buildDigests(sessions, meta = {}) {
   const rows = sessionRows(sessions);
-  const detail = sessions.filter((s) => s.round_log_json);
+  const detail = sessions.filter(hasRoundLog);
   const allRows = detail.flatMap((s) => rowsForSession(s));
   const shoes = shoeRows(sessions);
   const cut = shoes.filter((s) => s.played_to_cut_card).length;

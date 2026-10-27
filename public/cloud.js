@@ -16,7 +16,7 @@
   'use strict';
 
   var META_KEY = 'bjfCloudMeta';
-  var APP_VERSION = "Ram's BJ Friend v1.4.7";
+  var APP_VERSION = "Ram's BJ Friend v1.4.9";
   var STRATEGY_VERSION = "HIP-ENHC-S17-v1";
   var RULES_PROFILE = "6D / S17 / ENHC-full-loss / DOA / DAS";
   var API = {
@@ -33,6 +33,32 @@
   var syncTimer = null;
   var syncPending = false;
   var lastSyncedAt = null;
+
+  /* A sync carries only rounds the server has not confirmed, at most this many
+     at a time. Ram's rounds run ~2,300 characters, so a full batch is ~230 KB;
+     the whole-history payload it replaces was 5.5 MB and got every sync killed. */
+  var SYNC_BATCH = 100;
+  // Rounds asked for when this phone picks up a saved game: the server holds the
+  // rest, and the on-screen history needs only the newest few.
+  var RESUME_TAIL = 300;
+  // The engine's raw events sent with state. The AI context uses the newest 400,
+  // and the server keeps no more than that.
+  var EVENTS_SENT = 400;
+
+  var syncInFlight = false;
+  var syncAgain = false;
+  var retryTimer = null;
+  var retryDelay = 0;
+  var bootRounds = null;      // state.rounds when this page loaded
+  var health = { failStreak: 0, lastOkAt: null, lastOkRound: null, forked: false };
+  /* Nothing is sent until the server has said what it holds for this session.
+     A phone that reloaded from a stale copy must find that out BEFORE its copy
+     reaches the server — sent first, a stale copy is how a game forks. Rounds
+     played while this waits are saved on the phone and go up once it is known. */
+  var resumeChecked = false;
+  var resumeDelay = 0;
+  var syncWaiters = [];       // callers waiting for everything to land (syncNow)
+  var restoreWanted = false;  // "Go to saved game": switch once this screen's rounds have landed
 
   // ---------------------------------------------------------------- helpers
 
@@ -223,27 +249,90 @@
 
   // -------------------------------------------------------------- game hooks
 
+  /** How far the server holds THIS session, or null until it has said. */
+  function knownThrough() {
+    return meta.logThroughFor === meta.sessionId && typeof meta.logThrough === 'number'
+      ? meta.logThrough : null;
+  }
+
+  /** The server holds everything up to `n`: remember it, and let the round log
+   *  drop the confirmed rounds it no longer needs to keep. */
+  function noteThrough(n, sessionId) {
+    if (typeof n !== 'number') return;
+    meta.logThrough = n;
+    meta.logThroughFor = sessionId || meta.sessionId;
+    saveMeta(meta);
+    if (typeof window.BJF_ROUNDS_ACKED === 'function') window.BJF_ROUNDS_ACKED(n);
+  }
+
+  /* What the save warning reads. Plain facts; savewatch.js decides what to say. */
+  function healthSnapshot() {
+    return {
+      signedIn: Boolean(currentUser),
+      failStreak: health.failStreak,
+      lastOkAt: health.lastOkAt,
+      lastOkRound: health.lastOkRound,
+      forked: health.forked,
+      pending: syncPending || syncInFlight,
+      // Signed in, but the server has not yet said what it holds — so nothing
+      // has been sent. bootRounds lets the warning count rounds since the load.
+      holding: Boolean(currentUser) && !resumeChecked,
+      bootRounds: bootRounds,
+      restoring: restoreWanted,
+    };
+  }
+  function emitHealth() {
+    try { window.dispatchEvent(new CustomEvent('bjf:sync', { detail: healthSnapshot() })); }
+    catch (e) { /* a status line is never worth an exception */ }
+  }
+  window.BJF_SYNC_HEALTH = healthSnapshot;
+
+  /** State as sent: the raw event list cut to what anything reads. A copy — the
+   *  game's own state is never touched here. */
+  function stateToSend() {
+    /* global state */
+    if (!state || !Array.isArray(state.eventLog) || state.eventLog.length <= EVENTS_SENT) return state;
+    var copy = {};
+    for (var k in state) {
+      if (Object.prototype.hasOwnProperty.call(state, k)) copy[k] = state[k];
+    }
+    copy.eventLog = state.eventLog.slice(-EVENTS_SENT);
+    return copy;
+  }
+
   /** Snapshot of the live game state. Read-only — never mutated here. */
   function snapshot() {
     /* global state, shoe, lastBets */
+    var through = knownThrough();
     return {
+      v: 2,
       sessionId: meta.sessionId,
       deviceId: meta.deviceId,
       // Explicit, not document.title — the production title is now just the
       // app name, but reports still need the build identifier.
       appVersion: APP_VERSION,
       mode: window.BJF_MODE || 'practice',
-      // Omit rather than send [] — history.js loads AFTER cloud.js, so sending an
-      // empty array on a boot failure would wipe the stored per-hand history.
-      roundLog: typeof window.BJF_ROUND_LOG === 'function' ? window.BJF_ROUND_LOG() : null,
-      roundLogMeta: typeof window.BJF_ROUND_LOG_META === 'function'
-        ? window.BJF_ROUND_LOG_META() : null,
+      /* Only rounds the server has not confirmed, oldest first, a batch at a
+         time. Until it has said how far it holds — the first sync after a load —
+         send none: its reply says where to start. Sending the whole log blind is
+         what made every sync 5.5 MB and got each one killed.
+         An empty list cannot wipe anything: the server only ever appends. */
+      newRounds: through == null || typeof window.BJF_ROUNDS_SINCE !== 'function'
+        ? [] : window.BJF_ROUNDS_SINCE(through, SYNC_BATCH),
       strategyVersion: STRATEGY_VERSION,
       rulesProfileId: RULES_PROFILE,
-      state: state,
+      state: stateToSend(),
       shoe: shoe,
       lastBets: lastBets,
     };
+  }
+
+  /* A hand in progress: dealRound has counted the round and taken the stake, but
+     nothing has settled. A snapshot from now, restored later, would bring back
+     the stake without the hand. settleRound's save re-arms the sync. */
+  function midHand() {
+    /* global state */
+    return typeof state !== 'undefined' && state && (state.phase === 'player' || state.phase === 'dealer');
   }
 
   function scheduleSync() {
@@ -253,21 +342,85 @@
     syncTimer = setTimeout(flushSync, 400);
   }
 
+  function settleWaiters(err) {
+    var list = syncWaiters; syncWaiters = [];
+    list.forEach(function (w) { if (err) w.reject(err); else w.resolve(); });
+  }
+
+  /** Resolves once everything this screen holds has landed — for a caller that
+   *  must not act before it has (the AI analysis; "Go to saved game"). */
+  function syncNow() {
+    return new Promise(function (resolve, reject) {
+      syncWaiters.push({ resolve: resolve, reject: reject });
+      syncPending = true;
+      flushSync();
+    });
+  }
+
   function flushSync() {
     if (!currentUser || !syncPending) return;
-    setStatus('busy', 'Syncing…');
+    if (!resumeChecked) return;          // re-flushed the moment the check answers
+    if (midHand()) return;               // the settle re-arms it
+    // One request at a time. A round that settles while one is out re-arms it,
+    // and it goes as soon as this one answers.
+    if (syncInFlight) { syncAgain = true; return; }
+    clearTimeout(retryTimer);
+    syncInFlight = true;
+    syncPending = false;
+    var sentFor = meta.sessionId;
+    var before = knownThrough();
     var payload = snapshot();
+    setStatus('busy', 'Saving…');
     api(API.sync, { method: 'POST', body: JSON.stringify(payload) })
       .then(function (res) {
-        syncPending = false;
+        syncInFlight = false;
+        retryDelay = 0;
         lastSyncedAt = new Date();
-        setStatus('ok', currentUser.username + ' · saved');
+        if (res && meta.sessionId === sentFor) noteThrough(res.logThrough, sentFor);
+        health.failStreak = 0;
+        health.lastOkAt = Date.now();
+        health.lastOkRound = payload.state && typeof payload.state.rounds === 'number'
+          ? payload.state.rounds : health.lastOkRound;
+        // Kept beside the stored session rather than over it: this screen's game
+        // has diverged from the saved one. See src/repo.js resolveTarget.
+        health.forked = Boolean(res && res.forked);
+        setStatus(health.forked ? 'err' : 'ok',
+          currentUser.username + (health.forked ? ' · saved separately' : ' · saved'));
+        emitHealth();
+        /* More to send — a capped batch, or the first sync only learning where to
+           start — but ONLY if the reply moved where sending starts. A reply that
+           does not (an older server with no logThrough, or rounds the server
+           would not take) re-armed this at zero delay forever before. */
+        var through = knownThrough();
+        var moved = typeof res.logThrough === 'number' && res.logThrough !== before;
+        var more = moved && through != null && typeof window.BJF_ROUNDS_SINCE === 'function'
+          && window.BJF_ROUNDS_SINCE(through, 1).length > 0;
+        if (more || syncAgain) {
+          syncAgain = false;
+          syncPending = true;
+          setTimeout(flushSync, 0);
+          return res;
+        }
+        settleWaiters(null);
+        if (restoreWanted) finishGoToSavedGame();
         return res;
       })
       .catch(function (err) {
-        if (err.status === 401) return requireLogin();
-        // Stay dirty; the next settled round or the online event retries.
-        setStatus('err', 'Offline — will retry');
+        syncInFlight = false;
+        syncPending = true;              // still dirty
+        settleWaiters(err);
+        if (err && err.status === 401) { emitHealth(); return requireLogin(); }
+        health.failStreak += 1;
+        // Said plainly. "Offline — will retry" in a small chip is all Ram had for
+        // a day of syncs that never landed.
+        setStatus('err', 'Not saved — retrying');
+        emitHealth();
+        // Retry on a timer as well as on the next round, so stopping play does
+        // not leave the last rounds stranded. Backs off to two minutes so a
+        // struggling server is not hammered.
+        retryDelay = Math.min(120000, retryDelay ? retryDelay * 3 : 4000);
+        clearTimeout(retryTimer);
+        retryTimer = setTimeout(flushSync, retryDelay);
       });
   }
 
@@ -288,6 +441,8 @@
       window.resetSession = function () {
         var result = originalReset.apply(this, arguments);
         meta.sessionId = uuid();
+        // A new session: the server holds none of it, so syncing starts at 0.
+        meta.logThrough = 0; meta.logThroughFor = meta.sessionId;
         saveMeta(meta);
         renderAnalysis(null);
         loadHistory();
@@ -457,11 +612,11 @@
     if (btn) { btn.disabled = true; btn.textContent = 'Analysing…'; }
     renderMessage('Sending this session to Gemini on Vertex AI…');
 
-    // The session must exist server-side before it can be analysed.
-    syncPending = true;
-    api(API.sync, { method: 'POST', body: JSON.stringify(snapshot()) })
+    // The session must exist server-side before it can be analysed. Through the
+    // same one-at-a-time sync as everything else: posting beside it let two
+    // syncs of one session cross in flight.
+    syncNow()
       .then(function () {
-        syncPending = false;
         return api('/api/sessions/' + meta.sessionId + '/analyze', {
           method: 'POST',
           body: JSON.stringify({ reportText: report, context: buildContext() }),
@@ -669,8 +824,10 @@
 
   function requireLogin() {
     currentUser = null;
+    resumeChecked = false;          // the next sign-in checks again
     setStatus('err', 'Signed out');
     el('cloudOverlay').classList.remove('hidden');
+    emitHealth();
   }
 
   function onSignedIn(user, opts) {
@@ -679,31 +836,124 @@
     setStatus('ok', user.username);
     showPublishControl(user.canPublish === true);
     loadHistory();
+    // Every sign-in checks what the server holds before anything is sent. A
+    // sign-in that skipped the check would otherwise hold syncs forever.
     if (opts && opts.offerRestore) maybeRestore();
+    else resumeDone();
+    if (syncPending) flushSync();
+    emitHealth();
+  }
+
+  /* Does this phone's game agree with another copy at round n? Judged on the
+     engine's own per-round ledger (roundHistory): the money after round n, both
+     ways. Agreement there means the shorter copy is simply the longer one cut
+     off — the same game, not a different one. */
+  function roundAt(st, n) {
+    var h = st && Array.isArray(st.roundHistory) ? st.roundHistory : [];
+    for (var i = h.length - 1; i >= 0; i -= 1) {
+      if (h[i] && h[i].round === n) return h[i];
+      if (h[i] && h[i].round < n) break;
+    }
+    return null;
+  }
+  function lastSettled(st) {
+    var h = st && Array.isArray(st.roundHistory) ? st.roundHistory : [];
+    return h.length && h[h.length - 1] ? (h[h.length - 1].round || 0) : 0;
+  }
+  function sameGame(mineState, theirState) {
+    var at = Math.min(lastSettled(mineState), lastSettled(theirState));
+    if (at < 1) return true;                       // nothing settled on one side
+    var a = roundAt(mineState, at), b = roundAt(theirState, at);
+    if (!a || !b) return false;                    // cannot confirm: assume not
+    return Math.abs((a.totalNet || 0) - (b.totalNet || 0)) < 0.005
+        && Math.abs((a.bankroll || 0) - (b.bankroll || 0)) < 0.005;
+  }
+
+  /* Once the check has answered: start sending, and say so. */
+  function resumeDone() {
+    resumeChecked = true;
+    resumeDelay = 0;
+    emitHealth();
     if (syncPending) flushSync();
   }
 
   /**
-   * Pulls the newest session from the other device. Only auto-applies when the
-   * local session has no rounds, so an in-progress local session is never
-   * silently overwritten.
+   * On every load, asks the server what it holds before anything is sent.
+   *
+   * THE SAME SESSION. This used to return without a look, on the grounds that
+   * the phone's own copy of its own session must be current. On 26 October it was
+   * not — storage had been full since R1609 — and twice the reload came back at
+   * R1609 and the phone synced that older game over newer rounds the server held.
+   * Now: if the server is further ahead in the SAME game and nothing has been
+   * played here since the page loaded, this phone simply catches up — lossless,
+   * and said so. If this phone holds play of its own the server does not (it
+   * diverged, or was played on while unreachable), nothing here is thrown away:
+   * its rounds go up beside the saved game, and Ram chooses.
+   *
+   * A failed check is retried, not dropped. Until one answers, nothing is sent.
    */
   function maybeRestore() {
-    api(API.latest).then(function (res) {
+    api(API.latest + '?tail=' + RESUME_TAIL).then(function (res) {
       var remote = res.session;
-      if (!remote || !remote.state) return;
-      if (remote.id === meta.sessionId) return;
-      if (!remote.state.rounds) return;
+      if (!remote || !remote.state) { resumeDone(); return; }
 
+      // Mid-hand on this screen: decide once the hand has settled.
+      if (midHand()) { setTimeout(maybeRestore, 1500); return; }
+
+      if (remote.id === meta.sessionId) {
+        var theirs = remote.state.rounds || 0;
+        var mine = (typeof state !== 'undefined' && state && state.rounds) || 0;
+        var same = sameGame(state, remote.state);
+        var theirsMidHand = remote.state.phase === 'player' || remote.state.phase === 'dealer';
+        if (theirs > mine && same && mine === bootRounds && !theirsMidHand) {
+          applyRestore(remote, 'newer', true);       // a prefix of it: nothing to lose
+        } else if (theirs > mine) {
+          showRestoreBanner(remote, same ? 'newer' : 'diverged');
+        } else if (same) {
+          noteThrough(remote.logThrough, remote.id); // level or ahead, same game: send the rest
+        }
+        // Ahead on a DIFFERENT game: say nothing about where to start. The first
+        // sync's reply decides it, so every one of this phone's rounds goes up.
+        resumeDone();
+        return;
+      }
+
+      resumeDone();
+      if (!remote.state.rounds) return;
       if (state.rounds === 0) {
         applyRestore(remote);
       } else {
         showRestoreBanner(remote);
       }
-    }).catch(function () { /* history is optional */ });
+    }).catch(function (err) {
+      if (err && err.status === 401) return;         // requireLogin handles it
+      // Retried, not swallowed: until this answers, nothing is sent.
+      resumeDelay = Math.min(60000, resumeDelay ? resumeDelay * 2 : 2000);
+      emitHealth();
+      setTimeout(maybeRestore, resumeDelay);
+    });
   }
 
-  function applyRestore(remote) {
+  /* "Go to saved game". Never strands this screen's own rounds: they are sent
+     first (they land beside the saved game), and only then does it switch. */
+  function goToSavedGame() {
+    if (!currentUser) { requireLogin(); return; }
+    restoreWanted = true;
+    emitHealth();
+    syncPending = true;
+    if (!syncInFlight) flushSync();
+    if (!syncInFlight && !syncPending) finishGoToSavedGame();
+  }
+  function finishGoToSavedGame() {
+    restoreWanted = false;
+    api(API.latest + '?tail=' + RESUME_TAIL).then(function (res) {
+      if (res && res.session && res.session.state) applyRestore(res.session, 'chosen', true);
+      else emitHealth();
+    }).catch(function () { emitHealth(); });
+  }
+  window.BJF_GO_TO_SAVED_GAME = goToSavedGame;
+
+  function applyRestore(remote, reason, lossless) {
     /* global state, shoe, lastBets, makeShoe */
     // Assigning the game's global `let` bindings by bare name.
     state = remote.state;
@@ -718,8 +968,11 @@
     meta.sessionId = remote.id;
     saveMeta(meta);
     if (typeof window.BJF_LOAD_ROUND_LOG === 'function') {
-      window.BJF_LOAD_ROUND_LOG(remote.roundLog || [], remote.id);
+      window.BJF_LOAD_ROUND_LOG(remote.roundLog || [], remote.id, remote.logThrough);
     }
+    noteThrough(remote.logThrough, remote.id);
+    health.forked = false;
+    bootRounds = state.rounds;
 
     if (typeof window.buildWagerCards === 'function') window.buildWagerCards();
     if (typeof window.updateUI === 'function') window.updateUI();
@@ -729,23 +982,48 @@
     var banner = el('cloudRestoreBanner');
     if (banner) banner.remove();
     setStatus('ok', currentUser.username + ' · restored');
+    // Said out loud: his bankroll and round count just changed on screen, and
+    // he should know why rather than wonder whether something went wrong.
+    // "Nothing was lost" only when that is known to be true.
+    try {
+      window.dispatchEvent(new CustomEvent('bjf:restored', {
+        detail: { rounds: state.rounds, reason: reason || 'device', lossless: Boolean(lossless) },
+      }));
+    } catch (e) { /* the restore stands without the notice */ }
+    emitHealth();
   }
 
-  function showRestoreBanner(remote) {
+  function showRestoreBanner(remote, reason) {
     if (el('cloudRestoreBanner')) return;
     var main = document.querySelector('main');
     var div = document.createElement('div');
     div.className = 'cloud-banner';
     div.id = 'cloudRestoreBanner';
+    var lead, sub, yes, no;
+    if (reason === 'newer' || reason === 'diverged') {
+      // The same session, saved further ahead than this screen.
+      lead = 'Your saved game is further ahead than this screen — round '
+        + remote.state.rounds + ', saved ' + fmtDate(remote.updatedAt) + '.';
+      sub = 'Rounds played on this screen are kept too, saved separately, so nothing is lost.';
+      yes = 'Go to saved game';
+      no = 'Not now';
+    } else {
+      lead = 'A newer session from another device is available — '
+        + remote.state.rounds + ' rounds, updated ' + fmtDate(remote.updatedAt) + '.';
+      sub = 'Restoring replaces the session on this device.';
+      yes = 'Restore';
+      no = 'Keep this device';
+    }
     div.innerHTML =
-      '<div>A newer session from another device is available — ' +
-        remote.state.rounds + ' rounds, updated ' + fmtDate(remote.updatedAt) + '.' +
-        '<div class="muted">Restoring replaces the session on this device.</div></div>' +
+      '<div>' + escapeHTML(lead) + '<div class="muted">' + escapeHTML(sub) + '</div></div>' +
       '<div style="display:flex;gap:8px">' +
-        '<button class="primary small" id="cloudRestoreYes">Restore</button>' +
-        '<button class="secondary small" id="cloudRestoreNo">Keep this device</button></div>';
+        '<button class="primary small" id="cloudRestoreYes">' + escapeHTML(yes) + '</button>' +
+        '<button class="secondary small" id="cloudRestoreNo">' + escapeHTML(no) + '</button></div>';
     main.insertBefore(div, main.firstChild);
-    el('cloudRestoreYes').addEventListener('click', function () { applyRestore(remote); });
+    el('cloudRestoreYes').addEventListener('click', function () {
+      if (reason === 'newer' || reason === 'diverged') { div.remove(); goToSavedGame(); }
+      else applyRestore(remote);
+    });
     el('cloudRestoreNo').addEventListener('click', function () { div.remove(); });
   }
 
@@ -952,10 +1230,12 @@
       if (!confirm('Sign out? Local play continues, but nothing will sync.')) return;
       api(API.logout, { method: 'POST' }).then(function () {
         currentUser = null;
+        resumeChecked = false;
         showPublishControl(false);
         setStatus('', 'Signed out');
         loadHistory();
         el('cloudOverlay').classList.remove('hidden');
+        emitHealth();
       });
     });
 
@@ -972,6 +1252,7 @@
   // never blended in history or analysis.
   window.startNewCloudSession = function () {
     meta.sessionId = uuid();
+    meta.logThrough = 0; meta.logThroughFor = meta.sessionId;
     saveMeta(meta);
     if (typeof window.BJF_RESET_ROUND_LOG === 'function') window.BJF_RESET_ROUND_LOG(meta.sessionId);
     renderAnalysis(null);
@@ -979,6 +1260,10 @@
   };
 
   function boot() {
+    /* global state */
+    // The engine has already restored its save by now (its own script runs
+    // before this deferred one), so this is the round the page loaded at.
+    bootRounds = (typeof state !== 'undefined' && state && state.rounds) || 0;
     injectStyles();
     injectUI();
     stampBuild();

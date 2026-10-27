@@ -197,7 +197,14 @@ export async function publishDigests(env, userId, opts = {}) {
       const blobs = await repo.loadBlobs(env.DB, userId, group.map((s) => s.id));
       for (const s of group) {
         const blob = blobs.get(s.id);
-        if (blob) { s.round_log_json = blob.round_log_json; s.state_json = blob.state_json; }
+        if (blob) {
+          s.round_log_json = blob.round_log_json;
+          // Rounds appended since the log was chunked. Without this the fragment
+          // would be built from the frozen legacy blob alone and the newest play
+          // would silently drop out of every published file.
+          s.round_log_rounds = blob.round_log_rounds;
+          s.state_json = blob.state_json;
+        }
         s.digest_cache_json = JSON.stringify(buildSessionFragment(s));
         s.digest_cache_at = stamp;
         rebuilt.push({ id: s.id, json: s.digest_cache_json, at: stamp });
@@ -206,6 +213,7 @@ export async function publishDigests(env, userId, opts = {}) {
         // next session is loaded. Without the release the last log stays
         // resident for the life of the isolate.
         delete s.round_log_json;
+        delete s.round_log_rounds;
         delete s.state_json;
         releaseRounds();
       }
@@ -390,7 +398,8 @@ export async function publishDigests(env, userId, opts = {}) {
     const session = byId.get(f.sessionId);
     if (!blob || !session) continue;            // vanished between the two reads
     const body = buildShoeBody(
-      { ...session, round_log_json: blob.round_log_json }, f.shoe, { generatedAt },
+      { ...session, round_log_json: blob.round_log_json, round_log_rounds: blob.round_log_rounds },
+      f.shoe, { generatedAt },
     );
     const res = await putFile(token, owner, name, f.path, branch,
       JSON.stringify(body, null, 1) + '\n', message, false);
