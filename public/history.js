@@ -15,12 +15,42 @@
   'use strict';
 
   var LOG_KEY = 'bjfRoundLog';
-  // A 506-round session measures ~65KB of JSON (16KB per 12 rounds observed), so
-  // 2000 is comfortably inside localStorage and the sync payload. At 400 the
-  // first ~106 rounds of a long session were silently and permanently destroyed,
-  // because src/repo.js overwrites round_log_json wholesale on every sync.
+  // The ceiling on rounds held IN MEMORY. Signed in, the server confirms rounds
+  // as it stores them and this phone keeps only what it has not confirmed plus
+  // KEEP_CONFIRMED, so it is never approached. Signed out there is no server and
+  // this is the history.
   var MAX_ROUNDS = 2000;
   var roundLogTruncated = false;
+
+  /* WHAT THIS PHONE MUST KEEP, AND WHAT IT MERELY MAY
+   *
+   * Until 27 October the whole log lived in localStorage: 3.72 M characters at
+   * R1635, beside the engine's own 1.59 M save, against a 5.00 M quota. At R1609
+   * this write was the one that tipped over; it failed, the engine's failed the
+   * round after, and from then on nothing was saved — silently, both ways. Ram
+   * played on to R1754, refreshed, and came back at R1609 with round 1609 missing
+   * from the log. That gap is still in the server's copy.
+   *
+   * Now the server holds the full log and says how far (ackThrough). A round it
+   * has confirmed is safe without this phone, so the phone keeps only the newest
+   * KEEP_CONFIRMED of those — the on-screen history needs a handful — and every
+   * round it has NOT confirmed, which is the part a reload must never lose. */
+  var KEEP_CONFIRMED = 300;
+  var ackThrough = 0;
+  var localHealth = { ok: true, kept: 0, unconfirmed: 0 };
+
+  /** Index of the first round the server has not confirmed. */
+  function firstUnconfirmed() {
+    var i = roundLog.length;
+    while (i > 0 && roundLog[i - 1].round > ackThrough) i -= 1;
+    return i;
+  }
+
+  /** Drop confirmed rounds beyond what the on-screen history needs. */
+  function trimConfirmed() {
+    var start = firstUnconfirmed() - KEEP_CONFIRMED;
+    if (start > 0) roundLog = roundLog.slice(start);
+  }
 
   /* ---------------------------- DECISION CONTEXT ----------------------------
    * The engine records what was chosen and what was correct, but not what was
@@ -319,9 +349,15 @@
       }
       roundLog.push(snap);
     }
+    trimConfirmed();
     if (roundLog.length > MAX_ROUNDS) {
+      // Only reachable with ~1,700 rounds the server never confirmed — signed
+      // out, or offline that long. Those rounds exist nowhere else, so this is
+      // a real loss, and it is reported rather than swallowed.
+      var lost = roundLog.length - MAX_ROUNDS;
       roundLog = roundLog.slice(-MAX_ROUNDS);
-      roundLogTruncated = true;     // never drop rounds silently
+      roundLogTruncated = true;
+      localHealth.dropped = (localHealth.dropped || 0) + lost;
     }
     showingStored = false;
     expanded = false;              // a fresh round resets the list to the newest 2
@@ -329,16 +365,36 @@
     render();
   }
 
+  /* Writes what fits. Confirmed rounds are shed first, halving until the write
+     succeeds; unconfirmed rounds are never shed to make room, because they are
+     the part a reload must not lose. If even those alone will not fit, the write
+     fails and localHealth says so — it used to say nothing. */
   function persist() {
-    try {
-      localStorage.setItem(LOG_KEY, JSON.stringify({
-        sessionId: currentSessionId, rounds: roundLog,
-        // The flag lived only in memory, so any reload reset it to false over
-        // a log that WAS truncated: one session reported truncated:false
-        // while 763 rounds were missing from it.
-        truncated: roundLogTruncated,
-      }));
-    } catch (e) { /* quota — the server copy is authoritative */ }
+    var cut = firstUnconfirmed();
+    var unconfirmed = roundLog.slice(cut);
+    var confirmed = roundLog.slice(0, cut);
+    var keep = Math.min(confirmed.length, KEEP_CONFIRMED);
+    for (;;) {
+      var kept = confirmed.slice(confirmed.length - keep).concat(unconfirmed);
+      try {
+        localStorage.setItem(LOG_KEY, JSON.stringify({
+          sessionId: currentSessionId, rounds: kept,
+          // The flag lived only in memory, so any reload reset it to false over
+          // a log that WAS truncated: one session reported truncated:false
+          // while 763 rounds were missing from it.
+          truncated: roundLogTruncated,
+          ackThrough: ackThrough,
+        }));
+        localHealth = { ok: true, kept: kept.length, unconfirmed: unconfirmed.length,
+                        dropped: localHealth.dropped || 0 };
+        return true;
+      } catch (e) {
+        if (keep > 0) { keep = Math.floor(keep / 2); continue; }
+        localHealth = { ok: false, kept: 0, unconfirmed: unconfirmed.length,
+                        dropped: localHealth.dropped || 0 };
+        return false;
+      }
+    }
   }
 
   function restore() {
@@ -348,6 +404,13 @@
         roundLog = raw.rounds;
         currentSessionId = raw.sessionId || null;
         if (raw.truncated) roundLogTruncated = true;
+        ackThrough = typeof raw.ackThrough === 'number' ? raw.ackThrough : 0;
+        /* Carry the shoe count on across the reload. The engine restores the shoe
+           itself (cards remaining and all), but this only ever restored shoe
+           tracking when a log was adopted from the server — so after every
+           ordinary reload the next round was stamped shoe 1 again, splitting one
+           physical shoe into several in shoes.json. */
+        if (roundLog.length) restoreShoeTracking(roundLog[roundLog.length - 1]);
       }
     } catch (e) { roundLog = []; }
   }
@@ -640,7 +703,7 @@
     if (typeof originalReset === 'function') {
       window.resetSession = function () {
         var r = originalReset.apply(this, arguments);
-        roundLog = []; resetShoeTracking(); persist(); render(); renderPrevHand();
+        roundLog = []; resetShoeTracking(); ackThrough = 0; persist(); render(); renderPrevHand();
         showLastStoredIfEmpty();
         return r;
       };
@@ -766,9 +829,10 @@
     window.BJF_SET_ROUND_LOG = function (rounds, heading) {
       render(Array.isArray(rounds) ? rounds : [], heading);
     };
-    // Adopts a log pulled from the server (cross-device restore) as the
-    // working history for this session.
-    window.BJF_LOAD_ROUND_LOG = function (rounds, sessionId) {
+    // Adopts a log pulled from the server (cross-device restore, or this phone
+    // catching up with a newer saved game) as the working history. `through` is
+    // how far the server holds: everything up to it is already safe there.
+    window.BJF_LOAD_ROUND_LOG = function (rounds, sessionId, through) {
       roundLog = Array.isArray(rounds) ? rounds.slice(-MAX_ROUNDS) : [];
       // Resume has to continue the shoe count, not restart it. Without this a
       // session picked up on another device stamps its next round as shoe 1
@@ -776,13 +840,38 @@
       // restarts mid-shoe.
       restoreShoeTracking(roundLog[roundLog.length - 1]);
       if (sessionId) currentSessionId = sessionId;
+      ackThrough = typeof through === 'number' ? through
+        : (roundLog.length ? roundLog[roundLog.length - 1].round : 0);
+      trimConfirmed();
       persist();
       render();
     };
     window.BJF_RESET_ROUND_LOG = function (sessionId) {
-      roundLog = []; resetShoeTracking();
+      roundLog = []; resetShoeTracking(); ackThrough = 0;
       currentSessionId = sessionId || null; persist(); render();
     };
+
+    /* For the sync layer. Rounds past `n`, oldest first, at most `limit` — oldest
+       first so a capped batch never leaves a hole the server would step over. */
+    window.BJF_ROUNDS_SINCE = function (n, limit) {
+      var out = [];
+      for (var i = 0; i < roundLog.length; i += 1) {
+        if (roundLog[i].round > n) {
+          out.push(roundLog[i]);
+          if (limit && out.length >= limit) break;
+        }
+      }
+      return out;
+    };
+    // The server now holds everything up to `through`.
+    window.BJF_ROUNDS_ACKED = function (through) {
+      if (typeof through !== 'number' || through <= ackThrough) return;
+      ackThrough = through;
+      trimConfirmed();
+      persist();
+    };
+    window.BJF_ACK_THROUGH = function () { return ackThrough; };
+    window.BJF_LOCAL_LOG_HEALTH = function () { return localHealth; };
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);

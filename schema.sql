@@ -55,8 +55,10 @@ CREATE TABLE IF NOT EXISTS sessions (
   state_json         TEXT,              -- full `state` object
   shoe_json          TEXT,              -- remaining undealt cards
   last_bets_json     TEXT,
-  round_log_json     TEXT,              -- complete card-by-card round replay
-  round_log_meta     TEXT,              -- {truncated, maxRounds, shoesSeen, captured}
+  round_log_json     TEXT,              -- LEGACY, frozen 2026-10-27: rounds before chunking
+  round_log_meta     TEXT,              -- server-owned summary of what is held (see repo.js)
+  log_through        INTEGER,           -- highest round the server holds
+  fork_of            TEXT,              -- set on a copy that arrived behind the stored session
 
   -- Grading provenance. Without these a session cannot be excluded from an
   -- analysis on the grounds that it was graded by a superseded matrix.
@@ -66,6 +68,19 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user_updated
   ON sessions(user_id, updated_at DESC);
+
+-- ---------------------------------------------------------------------------
+-- The card-by-card round log, one row per round, appended and never replaced.
+-- A session synced since 2026-10-27 has every round here (its legacy
+-- round_log_json was copied across on first touch and is now a frozen backup).
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS round_detail (
+  session_id TEXT    NOT NULL,
+  round      INTEGER NOT NULL,
+  data       TEXT    NOT NULL,              -- the round exactly as history.js captured it
+  stored_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (session_id, round)
+);
 
 -- ---------------------------------------------------------------------------
 -- Round-by-round ledger (mirrors state.roundHistory, one row per round)

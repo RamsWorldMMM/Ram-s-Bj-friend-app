@@ -102,7 +102,7 @@ async function route(request, env, ctx, url) {
       ok: schema.ok,
       llm: env.MOCK_LLM === '1' ? 'mock' : 'vertex-ai',
       model: env.VERTEX_MODEL || 'gemini-2.5-flash',
-      appVersion: '1.4.8',
+      appVersion: '1.4.9',
       schema,
     });
   }
@@ -154,36 +154,44 @@ async function route(request, env, ctx, url) {
     if (!body?.sessionId || !body?.state) {
       return error('sessionId and state are required', 400);
     }
-    const result = await repo.syncSession(env.DB, user.id, {
-      sessionId: String(body.sessionId),
-      deviceId: body.deviceId,
-      appVersion: body.appVersion,
-      mode: body.mode,
-      state: body.state,
-      shoe: body.shoe,
-      lastBets: body.lastBets,
-      roundLog: body.roundLog,
-      roundLogMeta: body.roundLogMeta,
-      strategyVersion: body.strategyVersion,
-      rulesProfileId: body.rulesProfileId,
-    });
-    return json({ ok: true, ...result });
+    try {
+      const result = await repo.syncSession(env.DB, user.id, {
+        sessionId: String(body.sessionId),
+        deviceId: body.deviceId,
+        appVersion: body.appVersion,
+        mode: body.mode,
+        state: body.state,
+        shoe: body.shoe,
+        lastBets: body.lastBets,
+        // A current phone sends newRounds; an older build still sends its whole
+        // roundLog. Either way only rounds the server lacks are taken.
+        newRounds: body.newRounds,
+        roundLog: body.roundLog,
+        strategyVersion: body.strategyVersion,
+        rulesProfileId: body.rulesProfileId,
+      });
+      return json({ ok: true, ...result });
+    } catch (err) {
+      if (err && err.status) return error(err.message, err.status);
+      throw err;
+    }
   }
 
   // Most recent session across devices, for resume-on-login.
   if (path === '/api/sessions/latest' && method === 'GET') {
-    const row = await repo.latestSession(env.DB, user.id);
-    if (!row) return json({ session: null });
-    return json({
-      session: {
-        id: row.id,
-        updatedAt: row.updated_at,
-        deviceId: row.device_id,
-        state: row.state_json ? JSON.parse(row.state_json) : null,
-        shoe: row.shoe_json ? JSON.parse(row.shoe_json) : [],
-        lastBets: row.last_bets_json ? JSON.parse(row.last_bets_json) : [],
-        roundLog: row.round_log_json ? JSON.parse(row.round_log_json) : [],
-      },
+    /* ?tail=N is what a current phone asks for: it keeps only recent rounds,
+       because the server holds the rest. An older build asks without it and
+       treats what it gets as the whole history — so it must still get the whole
+       history, or it would believe its log had shrunk.
+       Built without parsing anything large: see repo.latestSessionText. */
+    const tail = Number(url.searchParams.get('tail'));
+    const text = await repo.latestSessionText(env.DB, user.id,
+      Number.isInteger(tail) && tail > 0 ? tail : null);
+    if (!text) return json({ session: null });
+    // Same headers as json(): no-store matters — a cached copy of this is
+    // exactly the stale game this endpoint exists to prevent.
+    return new Response(text, {
+      headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
     });
   }
 
@@ -227,7 +235,7 @@ async function route(request, env, ctx, url) {
   if (path === '/api/digests' && method === 'GET') {
     const sessions = await repo.exportSessions(env.DB, user.id, null);
     const generatedAt = new Date().toISOString();
-    const digests = buildDigests(sessions, { generatedAt, appVersion: '1.4.8' });
+    const digests = buildDigests(sessions, { generatedAt, appVersion: '1.4.9' });
     // Everything the publish button writes, so what will be published can be
     // inspected without publishing it.
     return json({
@@ -276,7 +284,7 @@ async function route(request, env, ctx, url) {
       const url2 = new URL(request.url);
       const backlog = url2.searchParams.get('backlog') !== '0';
       const result = await publishDigests(env, user.id, {
-        appVersion: '1.4.8',
+        appVersion: '1.4.9',
         backlog,
         // Lets the archive finish after the reply has gone, so Ram is not
         // waiting on fifteen seconds of raw-shoe writes he did not ask for.

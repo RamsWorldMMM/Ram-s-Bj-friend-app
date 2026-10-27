@@ -30,6 +30,30 @@
      shown anything, so a new release means a new entry at the top. */
   var RELEASES = [
     {
+      version: '1.4.9',
+      date: '27 October 2026',
+      items: [
+        {
+          kind: 'fix',
+          text: 'Your play is saved reliably again, however long the session runs.',
+          why: 'On 26 October your phone ran out of storage after round 1609 and '
+             + 'stopped saving without saying so — which is why refreshing took you '
+             + 'back there, twice. The rounds played after 1609 in that session '
+             + 'could not be recovered.',
+        },
+        {
+          kind: 'add',
+          text: 'If your play is ever not being saved, a bar across the top of the '
+              + 'screen now says so, and what to do.',
+        },
+        {
+          kind: 'change',
+          text: 'Reloading now picks up your latest saved game, even when this '
+              + "phone's own copy is older.",
+        },
+      ],
+    },
+    {
       version: '1.4.8',
       date: '23 October 2026',
       items: [

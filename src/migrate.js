@@ -26,6 +26,30 @@ const REQUIRED_COLUMNS = [
      round log of the session still being played and nothing else. */
   ['sessions',    'digest_cache_json', 'TEXT'],
   ['sessions',    'digest_cache_at',   'TEXT'],
+  /* The round log stopped being one replaced blob on 2026-10-27 — see
+     round_detail below. log_through is the highest round the server holds
+     for the session, which is what a phone needs to know to send only what is
+     missing. fork_of marks a copy whose line of play diverged from the stored
+     session and was kept beside it rather than written over it. */
+  ['sessions',    'log_through',      'INTEGER'],
+  ['sessions',    'fork_of',          'TEXT'],
+];
+
+/* Tables added after the first release. CREATE TABLE IF NOT EXISTS is a no-op
+   on a database that already has them, so running these on every cold isolate
+   is safe. */
+const REQUIRED_TABLES = [
+  /* One row per round, appended and never replaced (see src/repo.js). A round
+     is ~2,300 characters against D1's 2 MB row limit; the single field this
+     replaces was 3.7 M. INSERT ... ON CONFLICT DO NOTHING on the primary key is
+     the whole concurrency story: there is no read-modify-write to race. */
+  ['round_detail', `CREATE TABLE IF NOT EXISTS round_detail (
+      session_id TEXT    NOT NULL,
+      round      INTEGER NOT NULL,
+      data       TEXT    NOT NULL,
+      stored_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (session_id, round)
+    )`],
 ];
 
 let settled = false;          // per-isolate: reconcile once, not per request
@@ -51,6 +75,14 @@ export async function ensureSchema(db) {
   const added = [];
   const failed = [];
   const cache = new Map();
+
+  for (const [table, sql] of REQUIRED_TABLES) {
+    try {
+      await db.prepare(sql).run();
+    } catch (err) {
+      failed.push(`${table}: ${String(err && err.message || err)}`);
+    }
+  }
 
   for (const [table, column, definition] of REQUIRED_COLUMNS) {
     if (!cache.has(table)) cache.set(table, await columnsOf(db, table));

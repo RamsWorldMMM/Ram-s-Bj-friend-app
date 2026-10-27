@@ -1380,6 +1380,20 @@
     } catch (e) { /* the table plays the same without it */ }
   }
 
+  /* The save warning. Loaded last on purpose: its saveSession wrapper must be
+     the outermost, so it trims before every other layer saves and checks after
+     they all have. */
+  function loadSaveWatch() {
+    try {
+      if (document.getElementById('bjfSaveWatchJs')) return;
+      var sc = document.createElement('script');
+      sc.id = 'bjfSaveWatchJs';
+      sc.src = '/savewatch.js';
+      sc.defer = true;
+      document.head.appendChild(sc);
+    } catch (e) { /* the table plays the same without it */ }
+  }
+
   /* SIDE-BET QUICK AMOUNTS
    *
    * Ram stakes £50-£150 a side now, but the quick buttons still offered
@@ -1575,6 +1589,7 @@
     scheduleFreshStart();
     loadStakingPanel();
     loadWhatsNew();
+    loadSaveWatch();
     installRaisedCaps();
     installSidePresets();
     injectStyles();

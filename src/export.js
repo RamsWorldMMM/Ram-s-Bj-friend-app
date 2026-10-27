@@ -66,6 +66,14 @@ export function roundsOf(session) {
   // exactly that — and keying on the id handed back the first object's rounds
   // for the second. Object identity cannot be wrong in that way.
   if (session === lastSession) return lastRounds;
+  // A session written since the round log was chunked arrives already
+  // assembled (src/repo.js withAssembledLog): the frozen legacy blob followed by
+  // every appended round. Nothing to parse.
+  if (Array.isArray(session.round_log_rounds)) {
+    lastSession = session;
+    lastRounds = session.round_log_rounds;
+    return lastRounds;
+  }
   let rounds = [];
   try {
     const parsed = session.round_log_json ? JSON.parse(session.round_log_json) : [];
@@ -87,6 +95,17 @@ export function roundsOf(session) {
 export function releaseRounds() {
   lastSession = null;
   lastRounds = null;
+}
+
+/* Does this session carry per-round detail at all?
+ *
+ * Used to be a truthiness test on round_log_json. A session started after the
+ * log was chunked has NO round_log_json — every round is in the chunks — so
+ * that test would report it as having no detail, and the published caveat would
+ * say its rounds were "played on a build before round-log capture existed". */
+export function hasRoundLog(s) {
+  return Boolean(s && (s.round_log_json
+    || (Array.isArray(s.round_log_rounds) && s.round_log_rounds.length)));
 }
 
 /** Flattens one stored session into export rows. */
@@ -206,7 +225,7 @@ export function caveatsFor(sessions) {
     + 'Per-hand values (hand_bet, hand_net, hand_result) are on every row. '
     + 'To count rounds, count round_row = 1; to count boxes, count box_row = 1.');
 
-  const detail = sessions.filter((s) => s.round_log_json);
+  const detail = sessions.filter(hasRoundLog);
   const legacy = detail.filter((s) => !s.strategy_version);
   if (legacy.length) {
     out.push(`${legacy.length} of ${detail.length} session(s) with per-round detail predate the `
@@ -230,7 +249,7 @@ export function caveatsFor(sessions) {
       out.push(`Session ${s.id}: per-round detail starts at round ${meta.firstRound}, so ` +
         `${meta.firstRound - 1} earlier round(s) were played but not captured.`);
     }
-    if (s.rounds > 0 && !s.round_log_json) {
+    if (s.rounds > 0 && !hasRoundLog(s)) {
       out.push(`Session ${s.id}: ${s.rounds} rounds recorded but no per-round detail ` +
         `(played on a build before round-log capture existed).`);
     }
